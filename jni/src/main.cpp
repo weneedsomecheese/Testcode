@@ -20,13 +20,24 @@ static void *mod_thread(void *) {
 
     LOGI("libil2cpp.so found! Base: 0x%lx", (unsigned long)il2cpp::get_base_address());
 
-    auto *domain = il2cpp::domain_get();
-    LOGI("domain_get returned: %p", (void *)domain);
-
-    if (domain) {
-        il2cpp::thread_attach(domain);
-        LOGI("Thread attached to IL2CPP domain");
+    // Wait for il2cpp runtime to fully initialize before calling API
+    LOGI("Waiting for il2cpp runtime to initialize...");
+    Il2CppDomain *domain = nullptr;
+    for (int i = 0; i < 30; i++) {
+        usleep(1000000); // 1 second
+        domain = il2cpp::domain_get();
+        if (domain) break;
+        LOGI("domain_get returned null, retry %d/30...", i + 1);
     }
+
+    if (!domain) {
+        LOGE("Failed to get il2cpp domain after 30s");
+        return (void *)0;
+    }
+
+    LOGI("domain_get returned: %p", (void *)domain);
+    il2cpp::thread_attach(domain);
+    LOGI("Thread attached to IL2CPP domain");
 
     LOGI("=== Test done, domain_get + thread_attach only ===");
     return (void *)0;
