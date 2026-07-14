@@ -1,10 +1,8 @@
 #pragma once
 
-#include <jni.h>
-
 namespace menu {
 
-void init(JNIEnv *env, jobject context);
+void init();
 void show();
 void hide();
 bool is_visible();

@@ -1,7 +1,6 @@
 #pragma once
 
-#include <cstdint>
-#include <cstddef>
+#include "android_compat.h"
 
 namespace hook {
 

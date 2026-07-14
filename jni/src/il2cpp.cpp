@@ -1,10 +1,6 @@
 #include "il2cpp.h"
 #include "log.h"
 
-#include <dlfcn.h>
-#include <cstring>
-#include <link.h>
-
 namespace il2cpp {
 
 static void *lib_handle = nullptr;
@@ -71,7 +67,7 @@ static uintptr_t find_lib_base(const char *lib_name) {
 bool init(const char *lib_name) {
     lib_handle = dlopen(lib_name, RTLD_LAZY);
     if (!lib_handle) {
-        LOGE("Failed to dlopen %s: %s", lib_name, dlerror());
+        LOGE("Failed to dlopen %s", lib_name);
         return false;
     }
 
@@ -99,39 +95,39 @@ bool init(const char *lib_name) {
 }
 
 Il2CppDomain *domain_get() {
-    return fn_domain_get ? fn_domain_get() : nullptr;
+    return fn_domain_get ? fn_domain_get() : (Il2CppDomain *)0;
 }
 
 Il2CppThread *thread_attach(Il2CppDomain *domain) {
-    return fn_thread_attach ? fn_thread_attach(domain) : nullptr;
+    return fn_thread_attach ? fn_thread_attach(domain) : (Il2CppThread *)0;
 }
 
 Il2CppAssembly **domain_get_assemblies(Il2CppDomain *domain, size_t *count) {
-    return fn_domain_get_assemblies ? fn_domain_get_assemblies(domain, count) : nullptr;
+    return fn_domain_get_assemblies ? fn_domain_get_assemblies(domain, count) : (Il2CppAssembly **)0;
 }
 
 Il2CppImage *assembly_get_image(const Il2CppAssembly *assembly) {
-    return fn_assembly_get_image ? fn_assembly_get_image(assembly) : nullptr;
+    return fn_assembly_get_image ? fn_assembly_get_image(assembly) : (Il2CppImage *)0;
 }
 
 Il2CppClass *class_from_name(Il2CppImage *image, const char *namespaze, const char *name) {
-    return fn_class_from_name ? fn_class_from_name(image, namespaze, name) : nullptr;
+    return fn_class_from_name ? fn_class_from_name(image, namespaze, name) : (Il2CppClass *)0;
 }
 
 Il2CppClass *class_from_type(const Il2CppType *type) {
-    return fn_class_from_type ? fn_class_from_type(type) : nullptr;
+    return fn_class_from_type ? fn_class_from_type(type) : (Il2CppClass *)0;
 }
 
 const Il2CppMethodInfo *class_get_method_from_name(Il2CppClass *klass, const char *name, int argsCount) {
-    return fn_class_get_method_from_name ? fn_class_get_method_from_name(klass, name, argsCount) : nullptr;
+    return fn_class_get_method_from_name ? fn_class_get_method_from_name(klass, name, argsCount) : (const Il2CppMethodInfo *)0;
 }
 
 Il2CppFieldInfo *class_get_field_from_name(Il2CppClass *klass, const char *name) {
-    return fn_class_get_field_from_name ? fn_class_get_field_from_name(klass, name) : nullptr;
+    return fn_class_get_field_from_name ? fn_class_get_field_from_name(klass, name) : (Il2CppFieldInfo *)0;
 }
 
 Il2CppType *class_get_type(Il2CppClass *klass) {
-    return fn_class_get_type ? fn_class_get_type(klass) : nullptr;
+    return fn_class_get_type ? fn_class_get_type(klass) : (Il2CppType *)0;
 }
 
 void field_get_value(Il2CppObject *obj, Il2CppFieldInfo *field, void *value) {
@@ -151,11 +147,11 @@ void field_static_set_value(Il2CppFieldInfo *field, void *value) {
 }
 
 void *resolve_icall(const char *name) {
-    return fn_resolve_icall ? fn_resolve_icall(name) : nullptr;
+    return fn_resolve_icall ? fn_resolve_icall(name) : (void *)0;
 }
 
 Il2CppString *string_new(const char *str) {
-    return fn_string_new ? fn_string_new(str) : nullptr;
+    return fn_string_new ? fn_string_new(str) : (Il2CppString *)0;
 }
 
 const char *string_to_utf8(Il2CppString *str) {
@@ -168,17 +164,17 @@ uintptr_t get_base_address() {
 }
 
 void *get_method_pointer(const Il2CppMethodInfo *method) {
-    if (!method) return nullptr;
+    if (!method) return (void *)0;
     return *reinterpret_cast<void **>(const_cast<Il2CppMethodInfo *>(method));
 }
 
 Il2CppClass *find_class(const char *namespaze, const char *name) {
     auto *domain = domain_get();
-    if (!domain) return nullptr;
+    if (!domain) return (Il2CppClass *)0;
 
     size_t count = 0;
     auto **assemblies = domain_get_assemblies(domain, &count);
-    if (!assemblies) return nullptr;
+    if (!assemblies) return (Il2CppClass *)0;
 
     for (size_t i = 0; i < count; i++) {
         auto *image = assembly_get_image(assemblies[i]);
@@ -189,7 +185,7 @@ Il2CppClass *find_class(const char *namespaze, const char *name) {
     }
 
     LOGW("Class not found: %s.%s", namespaze, name);
-    return nullptr;
+    return (Il2CppClass *)0;
 }
 
 } // namespace il2cpp
