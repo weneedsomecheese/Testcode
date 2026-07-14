@@ -22,22 +22,8 @@ static bool set_mem_perms(void *addr, size_t len, int prot) {
 }
 
 static void flush_cache(void *addr, size_t len) {
-    uintptr_t start = reinterpret_cast<uintptr_t>(addr);
-    uintptr_t end = start + len;
-
-    uint64_t ctr;
-    asm volatile("mrs %0, ctr_el0" : "=r"(ctr));
-    size_t dcache_line = 4 << ((ctr >> 16) & 0xF);
-    size_t icache_line = 4 << ((ctr >> 0) & 0xF);
-
-    for (uintptr_t p = start & ~(dcache_line - 1); p < end; p += dcache_line)
-        asm volatile("dc cvau, %0" :: "r"(p));
-    asm volatile("dsb ish");
-
-    for (uintptr_t p = start & ~(icache_line - 1); p < end; p += icache_line)
-        asm volatile("ic ivau, %0" :: "r"(p));
-    asm volatile("dsb ish");
-    asm volatile("isb");
+    (void)addr;
+    (void)len;
 }
 
 bool init() {
