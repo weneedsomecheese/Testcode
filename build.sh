@@ -33,7 +33,6 @@ if [ "$BUILD_MODE" = "termux" ]; then
     # =============================================
     # TERMUX BUILD
     # =============================================
-    # Install dependencies if missing
     for pkg in clang make; do
         if ! command -v $pkg &>/dev/null; then
             echo "Installing $pkg..."
@@ -41,31 +40,36 @@ if [ "$BUILD_MODE" = "termux" ]; then
         fi
     done
 
-    CC="armv7a-linux-androideabi21-clang++"
-    if ! command -v $CC &>/dev/null; then
-        CC="clang++"
+    SOURCES="jni/src/main.cpp jni/src/il2cpp.cpp jni/src/hooks.cpp jni/src/menu.cpp jni/src/thumbhook.cpp"
+
+    ARCH=$(uname -m)
+    if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+        OUTDIR="libs/arm64-v8a"
+        ARCHFLAG=""
+        echo "Detected ARM64 phone — building arm64-v8a .so"
+        echo "(Put it in lib/arm64-v8a/ in the APK)"
+    else
+        OUTDIR="libs/armeabi-v7a"
+        ARCHFLAG="-mthumb"
+        echo "Detected ARM32 phone — building armeabi-v7a .so"
     fi
 
-    SOURCES="jni/src/main.cpp jni/src/il2cpp.cpp jni/src/hooks.cpp jni/src/menu.cpp jni/src/thumbhook.cpp"
-    OUTDIR="libs/armeabi-v7a"
     mkdir -p "$OUTDIR"
 
-    echo "Building with: $CC"
-    $CC \
+    echo "Building with: clang++"
+    clang++ \
         -shared -o "$OUTDIR/libmodmenu.so" \
         $SOURCES \
         -Ijni/include \
-        -target armv7a-linux-androideabi21 \
         -std=c++17 \
         -O2 \
         -fvisibility=hidden \
         -fno-rtti \
         -fno-exceptions \
-        -llog \
-        -landroid \
-        -ldl \
-        -mthumb \
+        -fPIC \
         -DANDROID \
+        -static-libstdc++ \
+        $ARCHFLAG \
         -s
 
     echo ""
@@ -75,7 +79,13 @@ if [ "$BUILD_MODE" = "termux" ]; then
     echo ""
     echo "Now use MT Manager to:"
     echo "  1. Open the game APK"
-    echo "  2. Add libmodmenu.so to lib/armeabi-v7a/"
+    if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+        echo "  2. Check if lib/arm64-v8a/ exists in the APK"
+        echo "     - If YES: add libmodmenu.so to lib/arm64-v8a/"
+        echo "     - If NO (only armeabi-v7a): you need a PC with NDK to cross-compile"
+    else
+        echo "  2. Add libmodmenu.so to lib/armeabi-v7a/"
+    fi
     echo "  3. Inject loadLibrary in the dex"
     echo "  4. Save, sign, install"
 
