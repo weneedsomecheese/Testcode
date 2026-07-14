@@ -68,7 +68,7 @@ if [ "$BUILD_MODE" = "termux" ]; then
         -fno-exceptions \
         -fPIC \
         -DANDROID \
-        -static-libstdc++ \
+        -nostdlib++ \
         $ARCHFLAG \
         -s
 
