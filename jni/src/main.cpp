@@ -39,7 +39,21 @@ static void *mod_thread(void *) {
     il2cpp::thread_attach(domain);
     LOGI("Thread attached to IL2CPP domain");
 
-    LOGI("=== Test done, domain_get + thread_attach only ===");
+    hook::init();
+
+    menu::set_toggle(0, true);
+    menu::set_toggle(1, true);
+    menu::set_toggle(2, true);
+    menu::set_toggle(3, true);
+    menu::set_toggle(4, true);
+    menu::set_toggle(5, true);
+    menu::set_toggle(6, true);
+    menu::set_slider(0, 10);
+    menu::set_slider(1, 10);
+
+    // install_hooks(); // Need new dump.cs RVAs for current APK
+
+    LOGI("=== Mod loaded, hooks disabled until new RVAs provided ===");
     return (void *)0;
 }
 
