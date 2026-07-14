@@ -238,8 +238,8 @@ float hook_CalcWeaponDamage(void *self, void *weaponLvlInfo, void *method) {
 // ============================================================================
 
 static void resolve_safe_integer(uintptr_t base) {
-    SafeInteger_Get = reinterpret_cast<SafeInteger_Get_t>(base + 0xC16050);
-    SafeInteger_Set = reinterpret_cast<SafeInteger_Set_t>(base + 0xC15FF8);
+    SafeInteger_Get = reinterpret_cast<SafeInteger_Get_t>(base + 0x141EBA0);
+    SafeInteger_Set = reinterpret_cast<SafeInteger_Set_t>(base + 0x141EB44);
     LOGI("SafeInteger.Get: %p, SafeInteger.Set: %p",
          (void *)SafeInteger_Get, (void *)SafeInteger_Set);
 }
@@ -253,32 +253,32 @@ void install_hooks() {
     resolve_safe_integer(base);
 
     // --- Gold ---
-    HOOK(0xA4FFB0, hook_CCharUser_AddGold,   orig_CCharUser_AddGold,   "CCharUser.AddGold");
-    HOOK(0xA95E88, hook_iDataCenter_AddGold,  orig_iDataCenter_AddGold, "iDataCenter.AddGold");
-    HOOK(0xBCB828, hook_formula_monstergold,  orig_formula_monstergold, "formula_monstergold");
-    HOOK(0xBCBB18, hook_formula_stagegold,    orig_formula_stagegold,   "formula_stagegold");
+    HOOK(0x12BB194, hook_CCharUser_AddGold,   orig_CCharUser_AddGold,   "CCharUser.AddGold");
+    HOOK(0x12F30B4, hook_iDataCenter_AddGold,  orig_iDataCenter_AddGold, "iDataCenter.AddGold");
+    HOOK(0x13E626C, hook_formula_monstergold,  orig_formula_monstergold, "formula_monstergold");
+    HOOK(0x13E649C, hook_formula_stagegold,    orig_formula_stagegold,   "formula_stagegold");
 
     // --- Crystal ---
-    HOOK(0xA95EDC, hook_iDataCenter_AddCrystal,  orig_iDataCenter_AddCrystal,  "iDataCenter.AddCrystal");
-    HOOK(0xACAFF8, hook_iGameState_AddCrystal,   orig_iGameState_AddCrystal,   "iGameState.AddCrystal");
+    HOOK(0x12F30FC, hook_iDataCenter_AddCrystal,  orig_iDataCenter_AddCrystal,  "iDataCenter.AddCrystal");
+    HOOK(0x131D41C, hook_iGameState_AddCrystal,   orig_iGameState_AddCrystal,   "iGameState.AddCrystal");
 
     // --- EXP ---
-    HOOK(0xA4F5A8, hook_CCharUser_AddExp,    orig_CCharUser_AddExp,    "CCharUser.AddExp");
-    HOOK(0xBCB9A0, hook_formula_monsterexp,  orig_formula_monsterexp,  "formula_monsterexp");
-    HOOK(0xBCBC90, hook_formula_stageexp,    orig_formula_stageexp,    "formula_stageexp");
+    HOOK(0x12BA99C, hook_CCharUser_AddExp,    orig_CCharUser_AddExp,    "CCharUser.AddExp");
+    HOOK(0x13E6370, hook_formula_monsterexp,  orig_formula_monsterexp,  "formula_monsterexp");
+    HOOK(0x13E65A0, hook_formula_stageexp,    orig_formula_stageexp,    "formula_stageexp");
 
     // --- God Mode ---
-    HOOK(0xA4F3D0, hook_UserOnHit,  orig_UserOnHit,  "CCharUser.OnHit");
+    HOOK(0x12BA818, hook_UserOnHit,  orig_UserOnHit,  "CCharUser.OnHit");
 
     // --- One-Hit Kill ---
-    HOOK(0x941EA8, hook_MobOnHit,   orig_MobOnHit,   "CCharMob.OnHit");
+    HOOK(0x11E80E0, hook_MobOnHit,   orig_MobOnHit,   "CCharMob.OnHit");
 
     // --- Unlimited Ammo ---
-    HOOK(0xB94E24, hook_ConsumeBullet,  orig_ConsumeBullet,  "CWeaponBase.ConsumeBullet");
-    HOOK(0xB93B30, hook_IsBulletEmpty,  orig_IsBulletEmpty,  "CWeaponBase.IsBulletEmpty");
+    HOOK(0x13BC39C, hook_ConsumeBullet,  orig_ConsumeBullet,  "CWeaponBase.ConsumeBullet");
+    HOOK(0x13BB4F0, hook_IsBulletEmpty,  orig_IsBulletEmpty,  "CWeaponBase.IsBulletEmpty");
 
     // --- Damage Multiplier ---
-    HOOK(0x950A40, hook_CalcWeaponDamage, orig_CalcWeaponDamage, "CCharPlayer.CalcWeaponDamage");
+    HOOK(0x11F3D18, hook_CalcWeaponDamage, orig_CalcWeaponDamage, "CCharPlayer.CalcWeaponDamage");
 
     LOGI("=== All hooks installed ===");
     LOGI("Toggle 0: Gold Multiply     (slider 0 = multiplier, default 10x)");
