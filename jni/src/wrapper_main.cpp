@@ -7,70 +7,53 @@ typedef jint (*JNI_OnLoad_t)(JavaVM *vm, void *reserved);
 
 static JNI_OnLoad_t orig_JNI_OnLoad = nullptr;
 
-static char g_debug_path[512] = {0};
+#define PKG "com.DecompAndRecomp.DinoHunterMultiplayer"
 
-static void init_debug_path() {
-    char cmdline[256] = {0};
-    int fd = open("/proc/self/cmdline", O_RDONLY, 0);
+static void try_write(const char *path, const char *msg) {
+    int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
     if (fd >= 0) {
-        read(fd, cmdline, sizeof(cmdline) - 1);
+        write(fd, msg, strlen(msg));
         close(fd);
-    }
-
-    // Build path: /sdcard/Android/data/<package>/files/mod_debug.txt
-    if (cmdline[0]) {
-        strcpy(g_debug_path, "/sdcard/Android/data/");
-        strcat(g_debug_path, cmdline);
-        strcat(g_debug_path, "/files");
-        mkdir(g_debug_path, 0777);
-        strcat(g_debug_path, "/mod_debug.txt");
     }
 }
 
 static void write_debug(const char *msg) {
-    // Try app-specific external storage (readable without root)
-    if (g_debug_path[0]) {
-        int fd = open(g_debug_path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
-        if (fd >= 0) {
-            write(fd, msg, strlen(msg));
-            close(fd);
-        }
-    }
-    // Also try sdcard root and /data/local/tmp as fallbacks
-    int fd = open("/sdcard/mod_debug.txt", O_WRONLY | O_CREAT | O_TRUNC, 0666);
-    if (fd >= 0) {
-        write(fd, msg, strlen(msg));
-        close(fd);
-    }
-    fd = open("/data/local/tmp/mod_debug.txt", O_WRONLY | O_CREAT | O_TRUNC, 0666);
-    if (fd >= 0) {
-        write(fd, msg, strlen(msg));
-        close(fd);
-    }
+    // Internal app data - most reliable
+    try_write("/data/data/" PKG "/mod_debug.txt", msg);
+
+    // External app-specific - create dir chain first
+    mkdir("/sdcard/Android/data/" PKG, 0777);
+    mkdir("/sdcard/Android/data/" PKG "/files", 0777);
+    try_write("/sdcard/Android/data/" PKG "/files/mod_debug.txt", msg);
+
+    mkdir("/storage/emulated/0/Android/data/" PKG, 0777);
+    mkdir("/storage/emulated/0/Android/data/" PKG "/files", 0777);
+    try_write("/storage/emulated/0/Android/data/" PKG "/files/mod_debug.txt", msg);
+
+    // Fallbacks
+    try_write("/sdcard/mod_debug.txt", msg);
+    try_write("/storage/emulated/0/mod_debug.txt", msg);
+    try_write("/data/local/tmp/mod_debug.txt", msg);
 }
 
 __attribute__((constructor))
 static void early_init() {
-    init_debug_path();
     write_debug("STEP1: wrapper constructor ran\n");
 
     void *h = dlopen("libmodmenu.so", RTLD_LAZY);
     if (h) {
-        char buf[512];
+        char buf[256];
         snprintf(buf, sizeof(buf),
             "STEP1: wrapper constructor ran\n"
-            "STEP2: dlopen libmodmenu.so SUCCESS (handle=%p)\n"
-            "DEBUG_PATH: %s\n",
-            h, g_debug_path);
+            "STEP2: dlopen libmodmenu.so SUCCESS (handle=%p)\n", h);
         write_debug(buf);
     } else {
         char *err = dlerror();
-        char buf[768];
+        char buf[512];
         snprintf(buf, sizeof(buf),
             "STEP1: wrapper constructor ran\n"
-            "STEP2: dlopen libmodmenu.so FAILED: %s\n"
-            "DEBUG_PATH: %s\n",
-            err ? err : "unknown error", g_debug_path);
+            "STEP2: dlopen libmodmenu.so FAILED: %s\n",
+            err ? err : "unknown error");
         write_debug(buf);
     }
 }

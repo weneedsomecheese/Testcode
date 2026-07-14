@@ -5,41 +5,32 @@
 
 extern void install_hooks();
 
-static char g_debug_path[512] = {0};
+#define PKG "com.DecompAndRecomp.DinoHunterMultiplayer"
 
-static void init_debug_path() {
-    char cmdline[256] = {0};
-    int fd = open("/proc/self/cmdline", O_RDONLY, 0);
-    if (fd >= 0) {
-        read(fd, cmdline, sizeof(cmdline) - 1);
-        close(fd);
-    }
-    if (cmdline[0]) {
-        strcpy(g_debug_path, "/sdcard/Android/data/");
-        strcat(g_debug_path, cmdline);
-        strcat(g_debug_path, "/files");
-        mkdir(g_debug_path, 0777);
-        strcat(g_debug_path, "/mod_debug.txt");
-    }
-}
-
-static void debug_write(const char *msg) {
-    if (g_debug_path[0]) {
-        int fd = open(g_debug_path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
-        if (fd >= 0) {
-            write(fd, msg, strlen(msg));
-            close(fd);
-        }
-    }
-    int fd = open("/sdcard/mod_debug.txt", O_WRONLY | O_CREAT | O_TRUNC, 0666);
+static void try_write(const char *path, const char *msg) {
+    int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
     if (fd >= 0) {
         write(fd, msg, strlen(msg));
         close(fd);
     }
 }
 
+static void debug_write(const char *msg) {
+    try_write("/data/data/" PKG "/mod_debug.txt", msg);
+
+    mkdir("/sdcard/Android/data/" PKG, 0777);
+    mkdir("/sdcard/Android/data/" PKG "/files", 0777);
+    try_write("/sdcard/Android/data/" PKG "/files/mod_debug.txt", msg);
+
+    mkdir("/storage/emulated/0/Android/data/" PKG, 0777);
+    mkdir("/storage/emulated/0/Android/data/" PKG "/files", 0777);
+    try_write("/storage/emulated/0/Android/data/" PKG "/files/mod_debug.txt", msg);
+
+    try_write("/sdcard/mod_debug.txt", msg);
+    try_write("/storage/emulated/0/mod_debug.txt", msg);
+}
+
 static void *mod_thread(void *) {
-    init_debug_path();
     LOGI("Mod thread started, waiting for il2cpp...");
     debug_write("STEP3: mod_thread started, waiting for libil2cpp.so\n");
 
