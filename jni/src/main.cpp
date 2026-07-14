@@ -5,12 +5,40 @@
 
 extern void install_hooks();
 
+static void debug_write(const char *msg) {
+    int fd = open("/sdcard/mod_debug.txt", O_WRONLY | O_CREAT | O_TRUNC, 0666);
+    if (fd >= 0) {
+        write(fd, msg, strlen(msg));
+        close(fd);
+    }
+    fd = open("/data/local/tmp/mod_debug.txt", O_WRONLY | O_CREAT | O_TRUNC, 0666);
+    if (fd >= 0) {
+        write(fd, msg, strlen(msg));
+        close(fd);
+    }
+}
+
 static void *mod_thread(void *) {
     LOGI("Mod thread started, waiting for il2cpp...");
+    debug_write("STEP3: mod_thread started, waiting for libil2cpp.so\n");
 
+    int attempts = 0;
     while (!il2cpp::init("libil2cpp.so")) {
         usleep(500000);
+        attempts++;
+        if (attempts > 120) {
+            debug_write("STEP3: mod_thread started\nSTEP4: FAILED - gave up waiting for libil2cpp.so after 60s\n");
+            return (void *)0;
+        }
     }
+
+    uintptr_t base = il2cpp::get_base_address();
+    char buf[512];
+    snprintf(buf, sizeof(buf),
+        "STEP3: mod_thread started\n"
+        "STEP4: libil2cpp.so found after %d attempts, base=0x%lx\n",
+        attempts, (unsigned long)base);
+    debug_write(buf);
 
     auto *domain = il2cpp::domain_get();
     if (domain) {
@@ -19,18 +47,24 @@ static void *mod_thread(void *) {
 
     hook::init();
 
-    // Enable mods by default
-    menu::set_toggle(0, true);  // gold multiply
-    menu::set_toggle(1, true);  // crystal multiply
-    menu::set_toggle(2, true);  // god mode
-    menu::set_toggle(3, true);  // one-hit kill
-    menu::set_toggle(4, true);  // unlimited ammo
-    menu::set_toggle(5, true);  // exp multiply
-    menu::set_toggle(6, true);  // damage multiply
-    menu::set_slider(0, 10);    // 10x gold/crystal/exp
-    menu::set_slider(1, 10);    // 10x damage
+    menu::set_toggle(0, true);
+    menu::set_toggle(1, true);
+    menu::set_toggle(2, true);
+    menu::set_toggle(3, true);
+    menu::set_toggle(4, true);
+    menu::set_toggle(5, true);
+    menu::set_toggle(6, true);
+    menu::set_slider(0, 10);
+    menu::set_slider(1, 10);
 
     install_hooks();
+
+    snprintf(buf, sizeof(buf),
+        "STEP3: mod_thread started\n"
+        "STEP4: libil2cpp.so found after %d attempts, base=0x%lx\n"
+        "STEP5: all hooks installed, all mods ON\n",
+        attempts, (unsigned long)base);
+    debug_write(buf);
 
     LOGI("=== Mod fully initialized! All mods ON ===");
     return (void *)0;

@@ -40,6 +40,15 @@ int   pthread_create(pthread_t *thread, const void *attr,
                      void *(*start_routine)(void *), void *arg);
 int   pthread_detach(pthread_t thread);
 
+int   open(const char *pathname, int flags, ...);
+long  write(int fd, const void *buf, size_t count);
+int   close(int fd);
+int   snprintf(char *str, size_t size, const char *format, ...);
+
+#define O_WRONLY  01
+#define O_CREAT   0100
+#define O_TRUNC   01000
+
 struct dl_phdr_info {
     uintptr_t dlpi_addr;
     const char *dlpi_name;
