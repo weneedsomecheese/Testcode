@@ -17,7 +17,8 @@ static int hook_count = 0;
 static bool set_mem_perms(void *addr, size_t len, int prot) {
     uintptr_t page_size = sysconf(_SC_PAGESIZE);
     uintptr_t page_start = reinterpret_cast<uintptr_t>(addr) & ~(page_size - 1);
-    return mprotect(reinterpret_cast<void *>(page_start), len + (reinterpret_cast<uintptr_t>(addr) - page_start), prot) == 0;
+    uintptr_t page_end = (reinterpret_cast<uintptr_t>(addr) + len + page_size - 1) & ~(page_size - 1);
+    return mprotect(reinterpret_cast<void *>(page_start), page_end - page_start, prot) == 0;
 }
 
 static void flush_cache(void *addr, size_t len) {
@@ -28,17 +29,6 @@ bool init() {
     LOGI("Hook engine initialized (ARM64 inline hook)");
     return true;
 }
-
-// ARM64 hook: overwrites 16 bytes at target with:
-//   LDR X17, #8      (0x58000051) — load address from PC+8
-//   BR  X17           (0xD61F0220) — branch to it
-//   <64-bit address>  — replacement function pointer
-//
-// Trampoline: copies original 16 bytes, then jumps back:
-//   <original 16 bytes>
-//   LDR X17, #8
-//   BR  X17
-//   <64-bit continue address>
 
 bool hook_function(void *target, void *replacement, void **original) {
     if (!target || !replacement || hook_count >= MAX_HOOKS) return false;
@@ -51,19 +41,18 @@ bool hook_function(void *target, void *replacement, void **original) {
 
     memcpy(entry->original_bytes, target, entry->hook_size);
 
-    // Allocate trampoline: 16 (original) + 4 (LDR) + 4 (BR) + 8 (addr) = 32 bytes
+    // Allocate trampoline as RW first (no EXEC — Android W^X policy)
     uint8_t *trampoline = static_cast<uint8_t *>(
-        mmap(0, 64, PROT_READ | PROT_WRITE | PROT_EXEC,
+        mmap(0, 4096, PROT_READ | PROT_WRITE,
              MAP_PRIVATE | MAP_ANONYMOUS, -1, 0));
     if (trampoline == MAP_FAILED) {
         LOGE("Failed to allocate trampoline");
         return false;
     }
 
-    // Copy original instructions to trampoline
     memcpy(trampoline, entry->original_bytes, entry->hook_size);
 
-    // Add jump back: LDR X17, #8; BR X17; <continue_addr>
+    // LDR X17, #8; BR X17; <64-bit address>
     uint32_t ldr_x17 = 0x58000051;
     uint32_t br_x17  = 0xD61F0220;
     uintptr_t continue_addr = target_addr + entry->hook_size;
@@ -71,15 +60,18 @@ bool hook_function(void *target, void *replacement, void **original) {
     memcpy(&trampoline[entry->hook_size], &ldr_x17, 4);
     memcpy(&trampoline[entry->hook_size + 4], &br_x17, 4);
     memcpy(&trampoline[entry->hook_size + 8], &continue_addr, 8);
+
+    // Switch trampoline from RW to RX (never both at once)
+    mprotect(trampoline, 4096, PROT_READ | PROT_EXEC);
     flush_cache(trampoline, entry->hook_size + 16);
 
     entry->trampoline = trampoline;
     if (original) *original = trampoline;
 
-    // Patch target: LDR X17, #8; BR X17; <replacement_addr>
-    if (!set_mem_perms(target, entry->hook_size, PROT_READ | PROT_WRITE | PROT_EXEC)) {
+    // Patch target: make writable (remove exec), write, then restore to RX
+    if (!set_mem_perms(target, entry->hook_size, PROT_READ | PROT_WRITE)) {
         LOGE("Failed to set memory permissions at %p", target);
-        munmap(trampoline, 64);
+        munmap(trampoline, 4096);
         return false;
     }
 
@@ -88,9 +80,9 @@ bool hook_function(void *target, void *replacement, void **original) {
     memcpy(&patch[0], &ldr_x17, 4);
     memcpy(&patch[4], &br_x17, 4);
     memcpy(&patch[8], &repl_addr, 8);
-    flush_cache(target, entry->hook_size);
 
     set_mem_perms(target, entry->hook_size, PROT_READ | PROT_EXEC);
+    flush_cache(target, entry->hook_size);
 
     hook_count++;
     LOGI("Hooked %p -> %p (trampoline: %p)", target, replacement, (void *)trampoline);
@@ -100,13 +92,13 @@ bool hook_function(void *target, void *replacement, void **original) {
 bool unhook_function(void *target) {
     for (int i = 0; i < hook_count; i++) {
         if (hooks[i].target == target) {
-            set_mem_perms(target, hooks[i].hook_size, PROT_READ | PROT_WRITE | PROT_EXEC);
+            set_mem_perms(target, hooks[i].hook_size, PROT_READ | PROT_WRITE);
             memcpy(target, hooks[i].original_bytes, hooks[i].hook_size);
             flush_cache(target, hooks[i].hook_size);
             set_mem_perms(target, hooks[i].hook_size, PROT_READ | PROT_EXEC);
 
             if (hooks[i].trampoline)
-                munmap(hooks[i].trampoline, 64);
+                munmap(hooks[i].trampoline, 4096);
 
             for (int j = i; j < hook_count - 1; j++)
                 hooks[j] = hooks[j + 1];
