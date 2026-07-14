@@ -6,7 +6,20 @@
 extern void install_hooks();
 
 static void *mod_thread(void *) {
-    LOGI("=== Mod thread alive, doing nothing ===");
+    LOGI("Mod thread started, waiting for il2cpp...");
+
+    int attempts = 0;
+    while (!il2cpp::init("libil2cpp.so")) {
+        usleep(500000);
+        attempts++;
+        if (attempts > 120) {
+            LOGE("Gave up waiting for libil2cpp.so after 60s");
+            return (void *)0;
+        }
+    }
+
+    LOGI("libil2cpp.so found! Base: 0x%lx", (unsigned long)il2cpp::get_base_address());
+    LOGI("=== Test done, no domain_get or hooks ===");
     return (void *)0;
 }
 
