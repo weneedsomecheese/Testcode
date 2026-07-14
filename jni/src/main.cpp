@@ -5,13 +5,33 @@
 
 extern void install_hooks();
 
-static void debug_write(const char *msg) {
-    int fd = open("/sdcard/mod_debug.txt", O_WRONLY | O_CREAT | O_TRUNC, 0666);
+static char g_debug_path[512] = {0};
+
+static void init_debug_path() {
+    char cmdline[256] = {0};
+    int fd = open("/proc/self/cmdline", O_RDONLY, 0);
     if (fd >= 0) {
-        write(fd, msg, strlen(msg));
+        read(fd, cmdline, sizeof(cmdline) - 1);
         close(fd);
     }
-    fd = open("/data/local/tmp/mod_debug.txt", O_WRONLY | O_CREAT | O_TRUNC, 0666);
+    if (cmdline[0]) {
+        strcpy(g_debug_path, "/sdcard/Android/data/");
+        strcat(g_debug_path, cmdline);
+        strcat(g_debug_path, "/files");
+        mkdir(g_debug_path, 0777);
+        strcat(g_debug_path, "/mod_debug.txt");
+    }
+}
+
+static void debug_write(const char *msg) {
+    if (g_debug_path[0]) {
+        int fd = open(g_debug_path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+        if (fd >= 0) {
+            write(fd, msg, strlen(msg));
+            close(fd);
+        }
+    }
+    int fd = open("/sdcard/mod_debug.txt", O_WRONLY | O_CREAT | O_TRUNC, 0666);
     if (fd >= 0) {
         write(fd, msg, strlen(msg));
         close(fd);
@@ -19,6 +39,7 @@ static void debug_write(const char *msg) {
 }
 
 static void *mod_thread(void *) {
+    init_debug_path();
     LOGI("Mod thread started, waiting for il2cpp...");
     debug_write("STEP3: mod_thread started, waiting for libil2cpp.so\n");
 

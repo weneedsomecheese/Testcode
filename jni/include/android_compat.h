@@ -41,9 +41,15 @@ int   pthread_create(pthread_t *thread, const void *attr,
 int   pthread_detach(pthread_t thread);
 
 int   open(const char *pathname, int flags, ...);
+long  read(int fd, void *buf, size_t count);
 long  write(int fd, const void *buf, size_t count);
 int   close(int fd);
+int   mkdir(const char *pathname, unsigned int mode);
 int   snprintf(char *str, size_t size, const char *format, ...);
+char *strcpy(char *dest, const char *src);
+char *strcat(char *dest, const char *src);
+
+#define O_RDONLY  00
 
 #define O_WRONLY  01
 #define O_CREAT   0100
