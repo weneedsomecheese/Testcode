@@ -32,23 +32,13 @@ static void build_path(char *out, const char *dir_from, const char *filename) {
 
 __attribute__((constructor))
 static void early_init() {
-    void *h = nullptr;
-
     Dl_info info;
     if (dladdr((void *)early_init, &info) && info.dli_fname) {
         char path[512];
         build_path(path, info.dli_fname, "libmodmenu.so");
-        h = dlopen(path, RTLD_LAZY);
-    }
-
-    if (!h)
-        h = dlopen("libmodmenu.so", RTLD_LAZY);
-
-    if (!h) {
-        // CRASH = dlopen failed (libmodmenu.so can't be loaded)
-        // NO CRASH = dlopen succeeded (mod loaded, issue is inside mod)
-        volatile int *p = (volatile int *)0;
-        *p = 42;
+        dlopen(path, RTLD_LAZY);
+    } else {
+        dlopen("libmodmenu.so", RTLD_LAZY);
     }
 }
 
