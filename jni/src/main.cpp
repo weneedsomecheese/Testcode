@@ -19,7 +19,16 @@ static void *mod_thread(void *) {
     }
 
     LOGI("libil2cpp.so found! Base: 0x%lx", (unsigned long)il2cpp::get_base_address());
-    LOGI("=== Test done, no domain_get or hooks ===");
+
+    auto *domain = il2cpp::domain_get();
+    LOGI("domain_get returned: %p", (void *)domain);
+
+    if (domain) {
+        il2cpp::thread_attach(domain);
+        LOGI("Thread attached to IL2CPP domain");
+    }
+
+    LOGI("=== Test done, domain_get + thread_attach only ===");
     return (void *)0;
 }
 
