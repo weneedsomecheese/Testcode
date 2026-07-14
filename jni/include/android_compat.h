@@ -11,7 +11,7 @@
 #define MAP_PRIVATE   0x02
 #define MAP_ANONYMOUS 0x20
 #define MAP_FAILED    ((void *)-1)
-#define _SC_PAGESIZE  30
+#define _SC_PAGESIZE  39
 
 typedef int32_t pid_t;
 typedef long    off_t;
