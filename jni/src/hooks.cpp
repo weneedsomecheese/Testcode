@@ -4,136 +4,162 @@
 #include "log.h"
 
 // ============================================================================
-// HOOK DEFINITIONS
+// GAME-SPECIFIC HOOKS
 //
-// To add hooks for your game:
-// 1. Use Il2CppDumper to get the dump.cs from your game's libil2cpp.so
-// 2. Find the methods you want to hook in dump.cs
-// 3. Get the method's RVA (offset) from the dump
-// 4. Define your hook function and original function pointer
-// 5. Register it in install_hooks()
+// Target classes (from dump.cs):
+//   CCharUser       — local player character (inherits CCharPlayer -> CCharBase)
+//   iDataCenter     — persistent save data (gold stored as SafeInteger at 0x10)
+//   CNameCardInfo   — player info (gold property at get/set_m_nGold)
+//   MyUtils          — static gold/exp formula functions
 //
-// Two approaches to hooking:
-//   A) By offset (faster, but breaks on game updates):
-//      hook::hook_addr(il2cpp::get_base_address() + OFFSET, hook_fn, &orig_fn);
-//
-//   B) By class/method name (survives updates if method signature unchanged):
-//      auto *klass = il2cpp::find_class("", "PlayerStats");
-//      auto *method = il2cpp::class_get_method_from_name(klass, "TakeDamage", 1);
-//      hook::hook_function(il2cpp::get_method_pointer(method), hook_fn, &orig_fn);
+// SafeInteger is the game's anti-cheat integer wrapper.
+//   SafeInteger.Get()        — RVA: 0xC16050
+//   SafeInteger.Set(int)     — RVA: 0xC15FF8
 // ============================================================================
 
-// --- Example: Hook a method by offset ---
-// Replace 0xABCDEF with the actual RVA from your dump.cs
-
-// Toggle indices for the mod menu
 enum Toggle {
-    TOGGLE_GOD_MODE = 0,
-    TOGGLE_ONE_HIT = 1,
-    TOGGLE_UNLIMITED_AMMO = 2,
-    TOGGLE_SPEED_HACK = 3,
+    TOGGLE_GOLD_MULTIPLY = 0,
+    TOGGLE_GOD_MODE      = 1,
+    TOGGLE_ONE_HIT       = 2,
 };
 
-// Example: Player.TakeDamage(float amount)
-typedef void (*TakeDamage_t)(void *self, float amount, void *method);
-static TakeDamage_t orig_TakeDamage = nullptr;
+// --- Gold multiplier ---
+// CCharUser.AddGold(SafeInteger nGold) — RVA: 0xA4FFB0
+// When gold is added to the player, multiply the amount.
+typedef void (*CCharUser_AddGold_t)(void *self, void *nGold, void *method);
+static CCharUser_AddGold_t orig_CCharUser_AddGold = nullptr;
 
-void hook_TakeDamage(void *self, float amount, void *method) {
+// SafeInteger methods resolved at runtime
+typedef int (*SafeInteger_Get_t)(void *self, void *method);
+typedef void (*SafeInteger_Set_t)(void *self, int value, void *method);
+static SafeInteger_Get_t SafeInteger_Get = nullptr;
+static SafeInteger_Set_t SafeInteger_Set = nullptr;
+
+void hook_CCharUser_AddGold(void *self, void *nGold, void *method) {
+    if (menu::get_toggle(TOGGLE_GOLD_MULTIPLY) && nGold && SafeInteger_Get && SafeInteger_Set) {
+        int original_gold = SafeInteger_Get(nGold, nullptr);
+        int multiplier = menu::get_slider(0);
+        if (multiplier < 2) multiplier = 10;
+        int new_gold = original_gold * multiplier;
+        SafeInteger_Set(nGold, new_gold, nullptr);
+        LOGI("Gold multiplied: %d -> %d (x%d)", original_gold, new_gold, multiplier);
+    }
+    orig_CCharUser_AddGold(self, nGold, method);
+}
+
+// --- iDataCenter.AddGold(int nGold) — RVA: 0xA95E88 ---
+// This is the persistent save data gold add. Multiplying here ensures
+// the gold actually gets saved.
+typedef void (*iDataCenter_AddGold_t)(void *self, int nGold, void *method);
+static iDataCenter_AddGold_t orig_iDataCenter_AddGold = nullptr;
+
+void hook_iDataCenter_AddGold(void *self, int nGold, void *method) {
+    if (menu::get_toggle(TOGGLE_GOLD_MULTIPLY)) {
+        int multiplier = menu::get_slider(0);
+        if (multiplier < 2) multiplier = 10;
+        LOGI("iDataCenter gold multiplied: %d -> %d (x%d)", nGold, nGold * multiplier, multiplier);
+        nGold *= multiplier;
+    }
+    orig_iDataCenter_AddGold(self, nGold, method);
+}
+
+// --- Gold formula hooks ---
+// MyUtils.formula_monstergold(int nGold, int nLevel) — RVA: 0xBCB828
+// MyUtils.formula_stagegold(int nGold, int nLevel)   — RVA: 0xBCBB18
+// These calculate how much gold monsters/stages give. Multiply the result.
+typedef int (*formula_gold_t)(int nGold, int nLevel, void *method);
+static formula_gold_t orig_formula_monstergold = nullptr;
+static formula_gold_t orig_formula_stagegold = nullptr;
+
+int hook_formula_monstergold(int nGold, int nLevel, void *method) {
+    int result = orig_formula_monstergold(nGold, nLevel, method);
+    if (menu::get_toggle(TOGGLE_GOLD_MULTIPLY)) {
+        int multiplier = menu::get_slider(0);
+        if (multiplier < 2) multiplier = 10;
+        result *= multiplier;
+    }
+    return result;
+}
+
+int hook_formula_stagegold(int nGold, int nLevel, void *method) {
+    int result = orig_formula_stagegold(nGold, nLevel, method);
+    if (menu::get_toggle(TOGGLE_GOLD_MULTIPLY)) {
+        int multiplier = menu::get_slider(0);
+        if (multiplier < 2) multiplier = 10;
+        result *= multiplier;
+    }
+    return result;
+}
+
+// --- God mode ---
+// CCharUser.OnHit(float fDmg, CWeaponInfoLevel, string) — RVA: 0xA4F3D0
+typedef bool (*OnHit_t)(void *self, float fDmg, void *pWeaponLvlInfo, void *sBodyPart, void *method);
+static OnHit_t orig_OnHit = nullptr;
+
+bool hook_OnHit(void *self, float fDmg, void *pWeaponLvlInfo, void *sBodyPart, void *method) {
     if (menu::get_toggle(TOGGLE_GOD_MODE)) {
-        return; // skip damage
+        return false;
     }
-    orig_TakeDamage(self, amount, method);
+    return orig_OnHit(self, fDmg, pWeaponLvlInfo, sBodyPart, method);
 }
 
-// Example: Enemy.get_Health()
-typedef float (*GetHealth_t)(void *self, void *method);
-static GetHealth_t orig_GetHealth = nullptr;
+// --- One-hit kill ---
+// CCharMob.OnHit(float fDmg, CWeaponInfoLevel, string) — need to find RVA
+// We hook the mob's OnHit and set damage to a massive value
+static OnHit_t orig_MobOnHit = nullptr;
 
-float hook_GetHealth(void *self, void *method) {
+bool hook_MobOnHit(void *self, float fDmg, void *pWeaponLvlInfo, void *sBodyPart, void *method) {
     if (menu::get_toggle(TOGGLE_ONE_HIT)) {
-        return 0.0f; // enemies always at 0 HP
+        fDmg = 999999.0f;
     }
-    return orig_GetHealth(self, method);
-}
-
-// Example: Weapon.get_AmmoCount()
-typedef int (*GetAmmoCount_t)(void *self, void *method);
-static GetAmmoCount_t orig_GetAmmoCount = nullptr;
-
-int hook_GetAmmoCount(void *self, void *method) {
-    if (menu::get_toggle(TOGGLE_UNLIMITED_AMMO)) {
-        return 999;
-    }
-    return orig_GetAmmoCount(self, method);
-}
-
-// Example: Player.get_MoveSpeed()
-typedef float (*GetMoveSpeed_t)(void *self, void *method);
-static GetMoveSpeed_t orig_GetMoveSpeed = nullptr;
-
-float hook_GetMoveSpeed(void *self, void *method) {
-    float speed = orig_GetMoveSpeed(self, method);
-    if (menu::get_toggle(TOGGLE_SPEED_HACK)) {
-        float multiplier = 1.0f + (menu::get_slider(0) / 10.0f);
-        return speed * multiplier;
-    }
-    return speed;
+    return orig_MobOnHit(self, fDmg, pWeaponLvlInfo, sBodyPart, method);
 }
 
 // ============================================================================
 // HOOK INSTALLATION
 // ============================================================================
 
-void install_hooks_by_offset() {
+static void resolve_safe_integer() {
     uintptr_t base = il2cpp::get_base_address();
-
-    // Replace these with real offsets from your dump.cs
-    // Format: hook::hook_addr(base + OFFSET, (void *)hook_fn, (void **)&orig_fn);
-    //
-    // Example (uncomment and replace offsets):
-    // hook::hook_addr(base + 0x123456, (void *)hook_TakeDamage, (void **)&orig_TakeDamage);
-    // hook::hook_addr(base + 0x234567, (void *)hook_GetHealth, (void **)&orig_GetHealth);
-    // hook::hook_addr(base + 0x345678, (void *)hook_GetAmmoCount, (void **)&orig_GetAmmoCount);
-    // hook::hook_addr(base + 0x456789, (void *)hook_GetMoveSpeed, (void **)&orig_GetMoveSpeed);
-
-    LOGI("Offset-based hooks installed (update offsets for your game)");
-}
-
-void install_hooks_by_name() {
-    // Approach B: Find methods by class and method name
-    // This is more robust across game updates
-
-    // Example (uncomment and update class/method names from your dump.cs):
-    //
-    // auto *player_class = il2cpp::find_class("", "Player");
-    // if (player_class) {
-    //     auto *take_damage = il2cpp::class_get_method_from_name(player_class, "TakeDamage", 1);
-    //     if (take_damage) {
-    //         hook::hook_method(il2cpp::get_method_pointer(take_damage),
-    //                           hook_TakeDamage, &orig_TakeDamage);
-    //     }
-    //
-    //     auto *get_speed = il2cpp::class_get_method_from_name(player_class, "get_MoveSpeed", 0);
-    //     if (get_speed) {
-    //         hook::hook_method(il2cpp::get_method_pointer(get_speed),
-    //                           hook_GetMoveSpeed, &orig_GetMoveSpeed);
-    //     }
-    // }
-    //
-    // auto *enemy_class = il2cpp::find_class("", "Enemy");
-    // if (enemy_class) {
-    //     auto *get_health = il2cpp::class_get_method_from_name(enemy_class, "get_Health", 0);
-    //     if (get_health) {
-    //         hook::hook_method(il2cpp::get_method_pointer(get_health),
-    //                           hook_GetHealth, &orig_GetHealth);
-    //     }
-    // }
-
-    LOGI("Name-based hooks installed (update class/method names for your game)");
+    SafeInteger_Get = reinterpret_cast<SafeInteger_Get_t>(base + 0xC16050);
+    SafeInteger_Set = reinterpret_cast<SafeInteger_Set_t>(base + 0xC15FF8);
+    LOGI("SafeInteger.Get: %p, SafeInteger.Set: %p",
+         (void *)SafeInteger_Get, (void *)SafeInteger_Set);
 }
 
 void install_hooks() {
-    // Choose one approach or mix both:
-    install_hooks_by_offset();
-    // install_hooks_by_name();
+    uintptr_t base = il2cpp::get_base_address();
+    resolve_safe_integer();
+
+    // Gold hooks
+    hook::hook_addr(base + 0xA4FFB0,
+                    (void *)hook_CCharUser_AddGold,
+                    (void **)&orig_CCharUser_AddGold);
+    LOGI("Hooked CCharUser.AddGold @ 0xA4FFB0");
+
+    hook::hook_addr(base + 0xA95E88,
+                    (void *)hook_iDataCenter_AddGold,
+                    (void **)&orig_iDataCenter_AddGold);
+    LOGI("Hooked iDataCenter.AddGold @ 0xA95E88");
+
+    hook::hook_addr(base + 0xBCB828,
+                    (void *)hook_formula_monstergold,
+                    (void **)&orig_formula_monstergold);
+    LOGI("Hooked MyUtils.formula_monstergold @ 0xBCB828");
+
+    hook::hook_addr(base + 0xBCBB18,
+                    (void *)hook_formula_stagegold,
+                    (void **)&orig_formula_stagegold);
+    LOGI("Hooked MyUtils.formula_stagegold @ 0xBCBB18");
+
+    // God mode
+    hook::hook_addr(base + 0xA4F3D0,
+                    (void *)hook_OnHit,
+                    (void **)&orig_OnHit);
+    LOGI("Hooked CCharUser.OnHit @ 0xA4F3D0");
+
+    LOGI("=== All hooks installed ===");
+    LOGI("Toggle 0: Gold Multiplier (slider 0 = multiplier, default 10x)");
+    LOGI("Toggle 1: God Mode");
+    LOGI("Toggle 2: One-Hit Kill");
 }
