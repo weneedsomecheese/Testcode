@@ -1,67 +1,61 @@
-#include "il2cpp.h"
-#include "hook.h"
-#include "menu.h"
-#include "log.h"
-
-extern void install_hooks();
+#include "android_compat.h"
 
 typedef void *JavaVM;
 typedef int jint;
 typedef jint (*JNI_OnLoad_t)(JavaVM *vm, void *reserved);
 
+typedef struct {
+    const char *dli_fname;
+    void       *dli_fbase;
+    const char *dli_sname;
+    void       *dli_saddr;
+} Dl_info;
+
+extern "C" int dladdr(const void *addr, Dl_info *info);
+
 static JNI_OnLoad_t orig_JNI_OnLoad = nullptr;
 
-static void *mod_thread(void *) {
-    LOGI("Mod thread started, waiting for il2cpp...");
-
-    int attempts = 0;
-    while (!il2cpp::init("libil2cpp.so")) {
-        usleep(500000);
-        attempts++;
-        if (attempts > 120) {
-            LOGE("Gave up waiting for libil2cpp.so after 60s");
-            return (void *)0;
-        }
+static void build_path(char *out, const char *dir_from, const char *filename) {
+    const char *last_slash = nullptr;
+    for (const char *p = dir_from; *p; p++) {
+        if (*p == '/') last_slash = p;
     }
-
-    LOGI("libil2cpp.so found! Base: 0x%lx", (unsigned long)il2cpp::get_base_address());
-
-    auto *domain = il2cpp::domain_get();
-    if (domain) {
-        il2cpp::thread_attach(domain);
-        LOGI("Thread attached to IL2CPP domain");
+    int i = 0;
+    if (last_slash) {
+        for (const char *p = dir_from; p <= last_slash && i < 480; p++)
+            out[i++] = *p;
     }
-
-    hook::init();
-
-    menu::set_toggle(0, true);
-    menu::set_toggle(1, true);
-    menu::set_toggle(2, true);
-    menu::set_toggle(3, true);
-    menu::set_toggle(4, true);
-    menu::set_toggle(5, true);
-    menu::set_toggle(6, true);
-    menu::set_slider(0, 10);
-    menu::set_slider(1, 10);
-
-    install_hooks();
-
-    LOGI("=== Mod fully initialized! All mods ON ===");
-    return (void *)0;
+    for (const char *p = filename; *p && i < 510; p++)
+        out[i++] = *p;
+    out[i] = '\0';
 }
 
 __attribute__((constructor))
-static void lib_entry() {
-    pthread_t tid;
-    pthread_create(&tid, 0, mod_thread, 0);
-    pthread_detach(tid);
+static void early_init() {
+    Dl_info info;
+    if (dladdr((void *)early_init, &info) && info.dli_fname) {
+        char path[512];
+        build_path(path, info.dli_fname, "libmodmenu.so");
+        dlopen(path, RTLD_LAZY);
+    } else {
+        dlopen("libmodmenu.so", RTLD_LAZY);
+    }
 }
 
 extern "C" __attribute__((visibility("default")))
 jint JNI_OnLoad(JavaVM *vm, void *reserved) {
     if (!orig_JNI_OnLoad) {
-        void *h = dlopen("libmain_orig.so", RTLD_LAZY);
-        if (h) orig_JNI_OnLoad = reinterpret_cast<JNI_OnLoad_t>(dlsym(h, "JNI_OnLoad"));
+        Dl_info info;
+        if (dladdr((void *)early_init, &info) && info.dli_fname) {
+            char path[512];
+            build_path(path, info.dli_fname, "libmain_orig.so");
+            void *h = dlopen(path, RTLD_LAZY);
+            if (h) orig_JNI_OnLoad = reinterpret_cast<JNI_OnLoad_t>(dlsym(h, "JNI_OnLoad"));
+        }
+        if (!orig_JNI_OnLoad) {
+            void *h = dlopen("libmain_orig.so", RTLD_LAZY);
+            if (h) orig_JNI_OnLoad = reinterpret_cast<JNI_OnLoad_t>(dlsym(h, "JNI_OnLoad"));
+        }
     }
     if (orig_JNI_OnLoad)
         return orig_JNI_OnLoad(vm, reserved);
