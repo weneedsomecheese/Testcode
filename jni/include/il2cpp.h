@@ -16,7 +16,7 @@ typedef void Il2CppArray;
 typedef void Il2CppThread;
 
 struct Il2CppArraySize {
-    Il2CppObject obj;
+    void *obj;
     void *bounds;
     uintptr_t max_length;
     void *vector[0];
