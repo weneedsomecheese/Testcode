@@ -6,41 +6,7 @@
 extern void install_hooks();
 
 static void *mod_thread(void *) {
-    LOGI("Mod thread started, waiting for il2cpp...");
-
-    int attempts = 0;
-    while (!il2cpp::init("libil2cpp.so")) {
-        usleep(500000);
-        attempts++;
-        if (attempts > 120) {
-            LOGE("Gave up waiting for libil2cpp.so after 60s");
-            return (void *)0;
-        }
-    }
-
-    LOGI("libil2cpp.so found! Base: 0x%lx", (unsigned long)il2cpp::get_base_address());
-
-    auto *domain = il2cpp::domain_get();
-    if (domain) {
-        il2cpp::thread_attach(domain);
-        LOGI("Thread attached to IL2CPP domain");
-    }
-
-    hook::init();
-
-    menu::set_toggle(0, true);
-    menu::set_toggle(1, true);
-    menu::set_toggle(2, true);
-    menu::set_toggle(3, true);
-    menu::set_toggle(4, true);
-    menu::set_toggle(5, true);
-    menu::set_toggle(6, true);
-    menu::set_slider(0, 10);
-    menu::set_slider(1, 10);
-
-    // install_hooks(); // DISABLED — need new RVAs for current APK
-
-    LOGI("=== Mod loaded (hooks disabled, waiting for new dump.cs) ===");
+    LOGI("=== Mod thread alive, doing nothing ===");
     return (void *)0;
 }
 
