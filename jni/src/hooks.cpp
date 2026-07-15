@@ -253,7 +253,7 @@ void install_hooks() {
     resolve_safe_integer(base);
 
     // --- Gold ---
-    HOOK(0x12BB194, hook_CCharUser_AddGold,   orig_CCharUser_AddGold,   "CCharUser.AddGold");
+    // CCharUser.AddGold skipped: only 4 bytes (thunk), too small for 16-byte patch
     HOOK(0x12F30B4, hook_iDataCenter_AddGold,  orig_iDataCenter_AddGold, "iDataCenter.AddGold");
     HOOK(0x13E626C, hook_formula_monstergold,  orig_formula_monstergold, "formula_monstergold");
     HOOK(0x13E649C, hook_formula_stagegold,    orig_formula_stagegold,   "formula_stagegold");
