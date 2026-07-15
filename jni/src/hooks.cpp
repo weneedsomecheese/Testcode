@@ -250,9 +250,23 @@ static void resolve_safe_integer(uintptr_t base) {
 
 void install_hooks() {
     uintptr_t base = il2cpp::get_base_address();
+    void *target = reinterpret_cast<void *>(base + 0x12BA818);
 
-    // TEST: Only god mode — returns false, never calls trampoline
-    HOOK(0x12BA818, hook_UserOnHit,  orig_UserOnHit,  "CCharUser.OnHit");
+    // TEST: read 16 bytes, mprotect to RW, write same bytes back, restore RX
+    uint8_t buf[16];
+    memcpy(buf, target, 16);
+    LOGI("Read 16 bytes from %p OK", target);
 
-    LOGI("=== Test: god mode hook only ===");
+    uintptr_t page_size = sysconf(_SC_PAGESIZE);
+    uintptr_t page_start = reinterpret_cast<uintptr_t>(target) & ~(page_size - 1);
+    int ret = mprotect(reinterpret_cast<void *>(page_start), page_size, PROT_READ | PROT_WRITE);
+    LOGI("mprotect RW: %d (page_size=%lu, page=0x%lx)", ret, (unsigned long)page_size, (unsigned long)page_start);
+
+    memcpy(target, buf, 16);
+    LOGI("Write-back OK");
+
+    ret = mprotect(reinterpret_cast<void *>(page_start), page_size, PROT_READ | PROT_EXEC);
+    LOGI("mprotect RX: %d", ret);
+
+    LOGI("=== Write-back test done, no hooks installed ===");
 }
