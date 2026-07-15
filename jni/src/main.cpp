@@ -51,9 +51,9 @@ static void *mod_thread(void *) {
     menu::set_slider(0, 10);
     menu::set_slider(1, 10);
 
-    // install_hooks(); // Need new dump.cs RVAs for current APK
+    install_hooks();
 
-    LOGI("=== Mod loaded, hooks disabled until new RVAs provided ===");
+    LOGI("=== Mod fully initialized! All mods ON ===");
     return (void *)0;
 }
 
