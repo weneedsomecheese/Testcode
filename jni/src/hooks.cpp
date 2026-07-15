@@ -250,42 +250,9 @@ static void resolve_safe_integer(uintptr_t base) {
 
 void install_hooks() {
     uintptr_t base = il2cpp::get_base_address();
-    resolve_safe_integer(base);
 
-    // --- Gold ---
-    // CCharUser.AddGold skipped: only 4 bytes (thunk), too small for 16-byte patch
-    HOOK(0x12F30B4, hook_iDataCenter_AddGold,  orig_iDataCenter_AddGold, "iDataCenter.AddGold");
-    HOOK(0x13E626C, hook_formula_monstergold,  orig_formula_monstergold, "formula_monstergold");
-    HOOK(0x13E649C, hook_formula_stagegold,    orig_formula_stagegold,   "formula_stagegold");
-
-    // --- Crystal ---
-    HOOK(0x12F30FC, hook_iDataCenter_AddCrystal,  orig_iDataCenter_AddCrystal,  "iDataCenter.AddCrystal");
-    HOOK(0x131D41C, hook_iGameState_AddCrystal,   orig_iGameState_AddCrystal,   "iGameState.AddCrystal");
-
-    // --- EXP ---
-    HOOK(0x12BA99C, hook_CCharUser_AddExp,    orig_CCharUser_AddExp,    "CCharUser.AddExp");
-    HOOK(0x13E6370, hook_formula_monsterexp,  orig_formula_monsterexp,  "formula_monsterexp");
-    HOOK(0x13E65A0, hook_formula_stageexp,    orig_formula_stageexp,    "formula_stageexp");
-
-    // --- God Mode ---
+    // TEST: Only god mode — returns false, never calls trampoline
     HOOK(0x12BA818, hook_UserOnHit,  orig_UserOnHit,  "CCharUser.OnHit");
 
-    // --- One-Hit Kill ---
-    HOOK(0x11E80E0, hook_MobOnHit,   orig_MobOnHit,   "CCharMob.OnHit");
-
-    // --- Unlimited Ammo ---
-    HOOK(0x13BC39C, hook_ConsumeBullet,  orig_ConsumeBullet,  "CWeaponBase.ConsumeBullet");
-    HOOK(0x13BB4F0, hook_IsBulletEmpty,  orig_IsBulletEmpty,  "CWeaponBase.IsBulletEmpty");
-
-    // --- Damage Multiplier ---
-    HOOK(0x11F3D18, hook_CalcWeaponDamage, orig_CalcWeaponDamage, "CCharPlayer.CalcWeaponDamage");
-
-    LOGI("=== All hooks installed ===");
-    LOGI("Toggle 0: Gold Multiply     (slider 0 = multiplier, default 10x)");
-    LOGI("Toggle 1: Crystal Multiply  (slider 0 = multiplier, default 10x)");
-    LOGI("Toggle 2: God Mode          (no damage taken)");
-    LOGI("Toggle 3: One-Hit Kill      (999999 damage to mobs)");
-    LOGI("Toggle 4: Unlimited Ammo    (no bullet consumption)");
-    LOGI("Toggle 5: EXP Multiply      (slider 0 = multiplier, default 10x)");
-    LOGI("Toggle 6: Damage Multiply   (slider 1 = multiplier, default 10x)");
+    LOGI("=== Test: god mode hook only ===");
 }
