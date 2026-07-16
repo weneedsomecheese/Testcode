@@ -6,6 +6,8 @@ Patches native x86-64 code in GameAssembly.dll for:
   1. God Mode        - Player cannot take damage
   2. One-Hit Kill    - All enemies die in one hit
   3. Unlimited Ammo  - Never consume bullets, never empty
+  4. Max Gold        - Gold always reads as 999,999,999
+  5. Max Crystal     - Crystals always read as 999,999,999
 
 Usage:
   python il2cpp_patcher.py                        (looks for GameAssembly.dll in current dir)
@@ -68,6 +70,28 @@ PATCHES = [
         "bytes": bytes([
             0x31, 0xC0,  # xor eax, eax   ; eax = 0 (false)
             0xC3,        # ret
+        ]),
+    },
+    {
+        "name": "Max Gold (999,999,999)",
+        "desc": "iDataCenter.get_Gold -> always return 999999999",
+        "offset": 0x3DEFC0,
+        "bytes": bytes([
+            # mov eax, 999999999 (0x3B9AC9FF)
+            0xB8, 0xFF, 0xC9, 0x9A, 0x3B,
+            # ret
+            0xC3,
+        ]),
+    },
+    {
+        "name": "Max Crystal (999,999,999)",
+        "desc": "iDataCenter.get_Crystal -> always return 999999999",
+        "offset": 0x3DEF20,
+        "bytes": bytes([
+            # mov eax, 999999999 (0x3B9AC9FF)
+            0xB8, 0xFF, 0xC9, 0x9A, 0x3B,
+            # ret
+            0xC3,
         ]),
     },
 ]
@@ -142,6 +166,8 @@ def main():
     print("    - God Mode (invincible)")
     print("    - One-Hit Kill (enemies die instantly)")
     print("    - Unlimited Ammo (infinite bullets)")
+    print("    - Max Gold (999,999,999)")
+    print("    - Max Crystal (999,999,999)")
     print()
     print("  To restore original: copy .backup over GameAssembly.dll")
 
