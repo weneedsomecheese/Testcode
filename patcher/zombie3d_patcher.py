@@ -6,7 +6,8 @@ Patches native x86-64 code in GameAssembly.dll for:
   1. Max Cash (Gold)  - Always shows 999,999,999 gold
   2. Max Crystal      - Always shows 999,999,999 crystals
   3. Free Spending    - Spending cash/crystals doesn't decrease them
-  4. Day 231          - Day counter locked at 231
+  4. Day 231+         - Day counter starts at 231 and keeps going up
+  5. Damage x5        - Player weapon damage multiplied by 5
 
 Usage:
   python zombie3d_patcher.py                        (looks for GameAssembly.dll in current dir)
@@ -55,12 +56,33 @@ PATCHES = [
         ]),
     },
     {
-        "name": "Day 231",
-        "desc": "GameState.get_LevelNum -> always return 231",
+        "name": "Day 231+",
+        "desc": "GameState.get_LevelNum -> return actual day + 230 (so day 1 = 231, keeps going up)",
         "offset": 0x33D870,
         "bytes": bytes([
-            0xB8, 0xE7, 0x00, 0x00, 0x00,  # mov eax, 231
-            0xC3,                            # ret
+            # mov eax, dword ptr [rcx+0x118]   ; load actual LevelNum
+            0x8B, 0x81, 0x18, 0x01, 0x00, 0x00,
+            # add eax, 230                      ; add 230 offset
+            0x05, 0xE6, 0x00, 0x00, 0x00,
+            # ret
+            0xC3,
+        ]),
+    },
+    {
+        "name": "Damage x5",
+        "desc": "Player.get_Damage -> return base damage * 5.0",
+        "offset": 0x34FED0,
+        "bytes": bytes([
+            # movss xmm0, dword ptr [rcx+0x64]  ; load this->damage
+            0xF3, 0x0F, 0x10, 0x41, 0x64,
+            # mov eax, 0x40A00000                ; 5.0f
+            0xB8, 0x00, 0x00, 0xA0, 0x40,
+            # movd xmm1, eax
+            0x66, 0x0F, 0x6E, 0xC8,
+            # mulss xmm0, xmm1                   ; damage * 5
+            0xF3, 0x0F, 0x59, 0xC1,
+            # ret
+            0xC3,
         ]),
     },
 ]
@@ -134,7 +156,8 @@ def main():
     print("    - Max Cash: 999,999,999 gold")
     print("    - Max Crystal: 999,999,999 crystals")
     print("    - Free Spending: buying things costs nothing")
-    print("    - Day 231")
+    print("    - Day 231+ (keeps going up: 231, 232, 233...)")
+    print("    - Damage x5 (weapon damage multiplied by 5)")
     print()
     print("  To restore original: copy .backup over GameAssembly.dll")
 
