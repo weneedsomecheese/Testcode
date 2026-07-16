@@ -19,22 +19,21 @@ class Program
 
         Console.WriteLine($"Loading {input}...");
         var mod = ModuleDefMD.Load(input);
-        Console.WriteLine($"Module: {mod.Name}, Types: {mod.Types.Count}");
 
-        // GOD MODE: CCharUser.OnHit -> return false (you take no damage)
+        // GOD MODE: CCharUser.OnHit -> return false
         ReplaceWithReturnBool(mod, "CCharUser", "OnHit", false, "God Mode");
 
-        // ONE-HIT KILL: set mob HP to 0 directly when OnHit is called
-        PatchOneHitKill(mod, "One-Hit Kill");
+        // ONE-HIT KILL: set fDmg = -999999 (NEGATIVE, because AddHP adds it to HP)
+        SetFloatParam(mod, "CCharMob", "OnHit", 0, -999999f, "One-Hit Kill (CCharMob)");
+        SetFloatParam(mod, "CCharBase", "OnHit", 0, -999999f, "One-Hit Kill (CCharBase)");
 
         // UNLIMITED AMMO
         ReplaceWithReturnVoid(mod, "CWeaponBase", "ConsumeBullet", "Unlimited Ammo (no consume)");
         ReplaceWithReturnBool(mod, "CWeaponBase", "get_IsBulletEmpty", false, "Unlimited Ammo (never empty)");
 
-        // DAMAGE x10000
-        MultiplyFloatReturn(mod, "CCharPlayer", "CalcWeaponDamage", 10000f, "Damage x10000");
-        // Also patch base class in case CCharMob uses it directly
-        MultiplyFloatReturn(mod, "CCharBase", "CalcWeaponDamage", 10000f, "Damage x10000 (base)");
+        // DAMAGE x10 (CalcWeaponDamage returns positive, but it gets negated before OnHit)
+        MultiplyFloatReturn(mod, "CCharPlayer", "CalcWeaponDamage", 10f, "Damage x10");
+        MultiplyFloatReturn(mod, "CCharBase", "CalcWeaponDamage", 10f, "Damage x10 (base)");
 
         // GOLD x10
         MultiplyIntParam(mod, "iDataCenter", "AddGold", 0, 10, "Gold x10 (iDataCenter)");
@@ -69,72 +68,7 @@ class Program
         return null;
     }
 
-    static FieldDef? FindField(TypeDef type, string name)
-    {
-        foreach (var f in type.Fields)
-            if (f.Name == name) return f;
-        return null;
-    }
-
     static void Log(string label, string msg) => Console.WriteLine($"  [{label}] {msg}");
-
-    static void PatchOneHitKill(ModuleDef mod, string label)
-    {
-        var mobType = FindType(mod, "CCharMob");
-        if (mobType == null) { Log(label, "SKIP: CCharMob not found"); return; }
-        var onHit = FindMethod(mobType, "OnHit");
-        if (onHit == null) { Log(label, "SKIP: OnHit not found on CCharMob"); return; }
-        if (onHit.Body == null || onHit.Body.Instructions.Count == 0) { Log(label, "SKIP: empty body"); return; }
-
-        // Find m_fHP field on CCharBase (parent class)
-        var baseType = FindType(mod, "CCharBase");
-        if (baseType == null) { Log(label, "SKIP: CCharBase not found"); return; }
-        var hpField = FindField(baseType, "m_fHP");
-        if (hpField == null) { Log(label, "SKIP: m_fHP field not found"); return; }
-
-        var instrs = onHit.Body.Instructions;
-
-        // Prepend: this.m_fHP = 0f;
-        // IL: ldarg.0; ldc.r4 0.0; stfld CCharBase::m_fHP
-        instrs.Insert(0, new Instruction(OpCodes.Ldarg_0));
-        instrs.Insert(1, new Instruction(OpCodes.Ldc_R4, 0f));
-        instrs.Insert(2, new Instruction(OpCodes.Stfld, hpField));
-
-        // Also set fDmg = 999999 as backup
-        var realParams = onHit.Parameters.Where(p => !p.IsHiddenThisParameter).ToList();
-        if (realParams.Count > 0)
-        {
-            instrs.Insert(3, new Instruction(OpCodes.Ldc_R4, 999999f));
-            instrs.Insert(4, new Instruction(OpCodes.Starg_S, realParams[0]));
-        }
-
-        onHit.Body.UpdateInstructionOffsets();
-        patches++;
-        Log(label, $"OK: CCharMob.OnHit -> this.m_fHP = 0 + fDmg = 999999");
-
-        // Also patch CCharBase.OnHit to set HP to 0 (in case it's called directly)
-        if (baseType != null)
-        {
-            var baseOnHit = FindMethod(baseType, "OnHit");
-            if (baseOnHit?.Body != null && baseOnHit.Body.Instructions.Count > 0)
-            {
-                var bi = baseOnHit.Body.Instructions;
-                bi.Insert(0, new Instruction(OpCodes.Ldarg_0));
-                bi.Insert(1, new Instruction(OpCodes.Ldc_R4, 0f));
-                bi.Insert(2, new Instruction(OpCodes.Stfld, hpField));
-
-                var baseParams = baseOnHit.Parameters.Where(p => !p.IsHiddenThisParameter).ToList();
-                if (baseParams.Count > 0)
-                {
-                    bi.Insert(3, new Instruction(OpCodes.Ldc_R4, 999999f));
-                    bi.Insert(4, new Instruction(OpCodes.Starg_S, baseParams[0]));
-                }
-                baseOnHit.Body.UpdateInstructionOffsets();
-                patches++;
-                Log(label, $"OK: CCharBase.OnHit -> this.m_fHP = 0 + fDmg = 999999");
-            }
-        }
-    }
 
     static void ReplaceWithReturnBool(ModuleDef mod, string typeName, string methodName, bool value, string label)
     {
@@ -167,6 +101,25 @@ class Program
         m.Body.UpdateInstructionOffsets();
         patches++;
         Log(label, $"OK: {typeName}.{methodName} -> return void");
+    }
+
+    static void SetFloatParam(ModuleDef mod, string typeName, string methodName, int pi, float val, string label)
+    {
+        var t = FindType(mod, typeName);
+        if (t == null) { Log(label, $"SKIP: type '{typeName}' not found"); return; }
+        var m = FindMethod(t, methodName);
+        if (m == null) { Log(label, $"SKIP: method '{methodName}' not found"); return; }
+        if (m.Body == null || m.Body.Instructions.Count == 0) { Log(label, "SKIP: empty body"); return; }
+
+        var realParams = m.Parameters.Where(p => !p.IsHiddenThisParameter).ToList();
+        if (pi >= realParams.Count) { Log(label, $"SKIP: param {pi} out of range"); return; }
+
+        var param = realParams[pi];
+        m.Body.Instructions.Insert(0, new Instruction(OpCodes.Ldc_R4, val));
+        m.Body.Instructions.Insert(1, new Instruction(OpCodes.Starg_S, param));
+        m.Body.UpdateInstructionOffsets();
+        patches++;
+        Log(label, $"OK: {typeName}.{methodName} param[{pi}] ({param.Name}) = {val}");
     }
 
     static void MultiplyIntParam(ModuleDef mod, string typeName, string methodName, int pi, int mul, string label)
