@@ -3,11 +3,10 @@
 Zombie3D Game - IL2CPP GameAssembly.dll Patcher
 
 Patches native x86-64 code in GameAssembly.dll for:
-  1. Max Cash (Gold)  - Always shows 999,999,999 gold
-  2. Max Crystal      - Always shows 999,999,999 crystals
-  3. Free Spending    - Spending cash/crystals doesn't decrease them
-  4. Day 231+         - Day counter starts at 231 and keeps going up
-  5. Damage x5        - Player weapon damage multiplied by 5
+  1. Max Currency      - All SafeInteger values read as 999,999,999
+  2. Free Spending     - Spending cash/crystals doesn't decrease them
+  3. Day 231+          - Day counter starts at 231 and keeps going up
+  4. Damage x5         - Player weapon damage multiplied by 5
 
 Usage:
   python zombie3d_patcher.py                        (looks for GameAssembly.dll in current dir)
@@ -22,7 +21,25 @@ import os
 
 PATCHES = [
     {
-        "name": "Max Cash (999,999,999)",
+        "name": "Max Currency (SafeInteger.Get)",
+        "desc": "SafeInteger.Get -> always return 999999999 (fixes buy/upgrade checks)",
+        "offset": 0x3B96D0,
+        "bytes": bytes([
+            0xB8, 0xFF, 0xC9, 0x9A, 0x3B,  # mov eax, 999999999 (0x3B9AC9FF)
+            0xC3,                            # ret
+        ]),
+    },
+    {
+        "name": "Max Currency (SafeInteger implicit->int)",
+        "desc": "SafeInteger.op_Implicit(SafeInteger)->int -> always return 999999999",
+        "offset": 0x3B9BF0,
+        "bytes": bytes([
+            0xB8, 0xFF, 0xC9, 0x9A, 0x3B,  # mov eax, 999999999 (0x3B9AC9FF)
+            0xC3,                            # ret
+        ]),
+    },
+    {
+        "name": "Max Cash (display)",
         "desc": "GameState.GetCash -> always return 999999999",
         "offset": 0x40AF20,
         "bytes": bytes([
@@ -31,7 +48,7 @@ PATCHES = [
         ]),
     },
     {
-        "name": "Max Crystal (999,999,999)",
+        "name": "Max Crystal (display)",
         "desc": "GameState.GetCrystal -> always return 999999999",
         "offset": 0x40AF40,
         "bytes": bytes([
@@ -56,14 +73,56 @@ PATCHES = [
         ]),
     },
     {
-        "name": "Day 231+",
-        "desc": "GameState.get_LevelNum -> return actual day + 230 (so day 1 = 231, keeps going up)",
+        "name": "Day 231+ (getter)",
+        "desc": "GameState.get_LevelNum -> return max(actual, 231)",
         "offset": 0x33D870,
         "bytes": bytes([
             # mov eax, dword ptr [rcx+0x118]   ; load actual LevelNum
             0x8B, 0x81, 0x18, 0x01, 0x00, 0x00,
-            # add eax, 230                      ; add 230 offset
-            0x05, 0xE6, 0x00, 0x00, 0x00,
+            # cmp eax, 231
+            0x3D, 0xE7, 0x00, 0x00, 0x00,
+            # jge +5 (skip mov)
+            0x7D, 0x05,
+            # mov eax, 231
+            0xB8, 0xE7, 0x00, 0x00, 0x00,
+            # ret
+            0xC3,
+        ]),
+    },
+    {
+        "name": "Day 231+ (setter)",
+        "desc": "GameState.set_LevelNum -> enforce minimum 231 before storing",
+        "offset": 0x410470,
+        "bytes": bytes([
+            # cmp edx, 231
+            0x81, 0xFA, 0xE7, 0x00, 0x00, 0x00,
+            # jge +6 (skip add)
+            0x7D, 0x06,
+            # add edx, 230
+            0x81, 0xC2, 0xE6, 0x00, 0x00, 0x00,
+            # mov [rcx+0x118], edx              ; store value
+            0x89, 0x91, 0x18, 0x01, 0x00, 0x00,
+            # ret
+            0xC3,
+        ]),
+    },
+    {
+        "name": "Day 231+ (DayUp)",
+        "desc": "GameState.DayUp -> increment LevelNum, enforce minimum 231",
+        "offset": 0x40A3B0,
+        "bytes": bytes([
+            # mov eax, dword ptr [rcx+0x118]   ; load LevelNum
+            0x8B, 0x81, 0x18, 0x01, 0x00, 0x00,
+            # inc eax                            ; day + 1
+            0xFF, 0xC0,
+            # cmp eax, 231
+            0x3D, 0xE7, 0x00, 0x00, 0x00,
+            # jge +5 (skip mov)
+            0x7D, 0x05,
+            # mov eax, 231
+            0xB8, 0xE7, 0x00, 0x00, 0x00,
+            # mov [rcx+0x118], eax              ; store back
+            0x89, 0x81, 0x18, 0x01, 0x00, 0x00,
             # ret
             0xC3,
         ]),
@@ -153,11 +212,14 @@ def main():
     print(f"  Backup file:  {backup_path}")
     print()
     print("  Active mods:")
-    print("    - Max Cash: 999,999,999 gold")
-    print("    - Max Crystal: 999,999,999 crystals")
+    print("    - Max Currency: all SafeInteger values = 999,999,999")
+    print("      (cash, crystals, ammo, medpacks, etc.)")
     print("    - Free Spending: buying things costs nothing")
     print("    - Day 231+ (keeps going up: 231, 232, 233...)")
     print("    - Damage x5 (weapon damage multiplied by 5)")
+    print()
+    print("  NOTE: Music toggle in settings may stop working")
+    print("        (minor side effect of day patch)")
     print()
     print("  To restore original: copy .backup over GameAssembly.dll")
 
