@@ -1,19 +1,16 @@
 #!/usr/bin/env python3
 """
-Zombie3D Game - IL2CPP GameAssembly.dll Patcher v4
+Zombie3D Game - IL2CPP GameAssembly.dll Patcher v5
 
 Patches native x86-64 code in GameAssembly.dll for:
   1. Reverse Spending  - Spending cash/crystals GIVES you money instead
-  2. Max on Gain       - Any cash/crystal gain sets value to 999,999,999
-  3. Display 999M      - Cash/crystal display shows 999,999,999
-  4. Day 231+          - Day counter starts at 231 and keeps going up
-  5. Tamper Detection  - Disable client-side cheat detection
+  2. Day 231+          - Day counter starts at 231 and keeps going up
+  3. Tamper Detection  - Disable client-side cheat detection
 
 How it works:
   - LoseCash jumps to AddCash -> spending gives you cash
-  - AddCash sets your cash SafeInteger to 999,999,999
-  - Same for crystal
-  - No global SafeInteger patch = no broken stats/spawns/levels
+  - LoseCrystal jumps to AddCrystal -> spending gives you crystals
+  - Your balance changes naturally (no forced 999M)
 
 Usage:
   python zombie3d_patcher.py                        (looks for GameAssembly.dll in current dir)
@@ -29,34 +26,8 @@ import os
 
 PATCHES = [
     #
-    # ── Currency: AddCash/AddCrystal set to 999M, LoseCash/LoseCrystal redirect ──
+    # ── Currency: LoseCash/LoseCrystal redirect to AddCash/AddCrystal ──
     #
-    {
-        "name": "AddCash -> Set 999M",
-        "desc": "GameState.AddCash -> set cash SafeInteger to 999M (tail-call SafeInteger.Set)",
-        "offset": 0x4098D0,
-        "bytes": bytes([
-            # mov rcx, [rcx+0x18]              ; this.cash (SafeInteger object)
-            0x48, 0x8B, 0x49, 0x18,
-            # mov edx, 999999999               ; 0x3B9AC9FF
-            0xBA, 0xFF, 0xC9, 0x9A, 0x3B,
-            # jmp SafeInteger.Set (RVA 0x3BA5A0, relative from RVA 0x40A6DE)
-            0xE9, 0xC2, 0xFE, 0xFA, 0xFF,
-        ]),
-    },
-    {
-        "name": "AddCrystal -> Set 999M",
-        "desc": "GameState.AddCrystal -> set crystal SafeInteger to 999M (tail-call SafeInteger.Set)",
-        "offset": 0x409990,
-        "bytes": bytes([
-            # mov rcx, [rcx+0x20]              ; this.crystal (SafeInteger object)
-            0x48, 0x8B, 0x49, 0x20,
-            # mov edx, 999999999               ; 0x3B9AC9FF
-            0xBA, 0xFF, 0xC9, 0x9A, 0x3B,
-            # jmp SafeInteger.Set (RVA 0x3BA5A0, relative from RVA 0x40A79E)
-            0xE9, 0x02, 0xFE, 0xFA, 0xFF,
-        ]),
-    },
     {
         "name": "LoseCash -> AddCash (reverse)",
         "desc": "GameState.LoseCash -> jmp to AddCash (spending gives you cash instead)",
@@ -73,24 +44,6 @@ PATCHES = [
         "bytes": bytes([
             # jmp AddCrystal (RVA 0x40A790, relative from RVA 0x40F4C5)
             0xE9, 0xCB, 0xB2, 0xFF, 0xFF,
-        ]),
-    },
-    {
-        "name": "Max Cash (display)",
-        "desc": "GameState.GetCash -> always return 999999999",
-        "offset": 0x40AF20,
-        "bytes": bytes([
-            0xB8, 0xFF, 0xC9, 0x9A, 0x3B,  # mov eax, 999999999
-            0xC3,                            # ret
-        ]),
-    },
-    {
-        "name": "Max Crystal (display)",
-        "desc": "GameState.GetCrystal -> always return 999999999",
-        "offset": 0x40AF40,
-        "bytes": bytes([
-            0xB8, 0xFF, 0xC9, 0x9A, 0x3B,  # mov eax, 999999999
-            0xC3,                            # ret
         ]),
     },
     #
@@ -168,7 +121,7 @@ PATCHES = [
 
 def main():
     print("=" * 60)
-    print("  Zombie3D Game - IL2CPP Patcher v4")
+    print("  Zombie3D Game - IL2CPP Patcher v5")
     print("=" * 60)
     print()
 
@@ -232,15 +185,12 @@ def main():
     print()
     print("  Active mods:")
     print("    - Spending GIVES you money (LoseCash -> AddCash)")
-    print("    - Any cash/crystal gain sets balance to 999,999,999")
-    print("    - Display shows 999,999,999")
     print("    - Day 231+ (keeps going up)")
     print("    - Client-side tamper detection disabled")
     print()
-    print("  HOW TO GET STARTED:")
-    print("    Your cash/crystal becomes 999M after you earn ANY amount")
-    print("    (complete a mission, pick up loot, etc). After that,")
-    print("    every purchase gives you money back instead of taking it.")
+    print("  HOW IT WORKS:")
+    print("    Every purchase adds the cost to your balance instead of")
+    print("    subtracting it. Your currency grows naturally as you buy.")
     print()
     print("  Weapon stats, character stats, and spawns are NOT modified.")
     print()
