@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Zombie3D Game - IL2CPP GameAssembly.dll Patcher v5
+Zombie3D Game - IL2CPP GameAssembly.dll Patcher v6
 
 Patches native x86-64 code in GameAssembly.dll for:
   1. Reverse Spending  - Spending cash/crystals GIVES you money instead
-  2. Day 231+          - Day counter starts at 231 and keeps going up
+  2. Day Progression   - Day 1 -> 30 -> 231 -> normal (+1 each)
   3. Tamper Detection  - Disable client-side cheat detection
 
 How it works:
@@ -47,43 +47,23 @@ PATCHES = [
         ]),
     },
     #
-    # ── Day 231+ ──
+    # ── Day progression: 1 -> 30 -> 231 -> normal +1 ──
     #
     {
-        "name": "Day 231+ (getter)",
-        "desc": "GameState.get_LevelNum -> return max(actual, 231)",
-        "offset": 0x33D870,
-        "bytes": bytes([
-            0x8B, 0x81, 0x18, 0x01, 0x00, 0x00,  # mov eax, [rcx+0x118]
-            0x3D, 0xE7, 0x00, 0x00, 0x00,          # cmp eax, 231
-            0x7D, 0x05,                              # jge +5
-            0xB8, 0xE7, 0x00, 0x00, 0x00,          # mov eax, 231
-            0xC3,                                    # ret
-        ]),
-    },
-    {
-        "name": "Day 231+ (setter)",
-        "desc": "GameState.set_LevelNum -> enforce minimum 231",
-        "offset": 0x410470,
-        "bytes": bytes([
-            0x81, 0xFA, 0xE7, 0x00, 0x00, 0x00,  # cmp edx, 231
-            0x7D, 0x06,                            # jge +6
-            0x81, 0xC2, 0xE6, 0x00, 0x00, 0x00,  # add edx, 230
-            0x89, 0x91, 0x18, 0x01, 0x00, 0x00,  # mov [rcx+0x118], edx
-            0xC3,                                  # ret
-        ]),
-    },
-    {
-        "name": "Day 231+ (DayUp)",
-        "desc": "GameState.DayUp -> increment LevelNum, enforce minimum 231",
+        "name": "Day Progression (DayUp)",
+        "desc": "GameState.DayUp -> day 1->30, day 30->231, then normal +1",
         "offset": 0x40A3B0,
         "bytes": bytes([
-            0x8B, 0x81, 0x18, 0x01, 0x00, 0x00,  # mov eax, [rcx+0x118]
-            0xFF, 0xC0,                            # inc eax
+            0x8B, 0x81, 0x18, 0x01, 0x00, 0x00,  # mov eax, [rcx+0x118]  ; current day
+            0xFF, 0xC0,                            # inc eax               ; +1
             0x3D, 0xE7, 0x00, 0x00, 0x00,          # cmp eax, 231
-            0x7D, 0x05,                              # jge +5
-            0xB8, 0xE7, 0x00, 0x00, 0x00,          # mov eax, 231
-            0x89, 0x81, 0x18, 0x01, 0x00, 0x00,  # mov [rcx+0x118], eax
+            0x7D, 0x11,                              # jge store            ; >= 231 -> keep (normal)
+            0x83, 0xF8, 0x1E,                        # cmp eax, 30
+            0x7D, 0x07,                              # jge set231           ; >= 30 -> jump to 231
+            0xB8, 0x1E, 0x00, 0x00, 0x00,          # mov eax, 30          ; < 30 -> jump to 30
+            0xEB, 0x05,                              # jmp store
+            0xB8, 0xE7, 0x00, 0x00, 0x00,          # mov eax, 231         ; set231
+            0x89, 0x81, 0x18, 0x01, 0x00, 0x00,  # mov [rcx+0x118], eax  ; store
             0xC3,                                  # ret
         ]),
     },
@@ -121,7 +101,7 @@ PATCHES = [
 
 def main():
     print("=" * 60)
-    print("  Zombie3D Game - IL2CPP Patcher v5")
+    print("  Zombie3D Game - IL2CPP Patcher v6")
     print("=" * 60)
     print()
 
@@ -185,7 +165,7 @@ def main():
     print()
     print("  Active mods:")
     print("    - Spending GIVES you money (LoseCash -> AddCash)")
-    print("    - Day 231+ (keeps going up)")
+    print("    - Day progression: 1 -> 30 -> 231 -> normal +1")
     print("    - Client-side tamper detection disabled")
     print()
     print("  HOW IT WORKS:")
