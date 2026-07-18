@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Zombie3D Game - IL2CPP GameAssembly.dll Patcher v6
+Zombie3D Game - IL2CPP GameAssembly.dll Patcher v7
 
 Patches native x86-64 code in GameAssembly.dll for:
   1. Reverse Spending  - Spending cash/crystals GIVES you money instead
@@ -29,21 +29,27 @@ PATCHES = [
     # ── Currency: LoseCash/LoseCrystal redirect to AddCash/AddCrystal ──
     #
     {
-        "name": "LoseCash -> AddCash (reverse)",
-        "desc": "GameState.LoseCash -> jmp to AddCash (spending gives you cash instead)",
+        "name": "LoseCash -> AddCash (reverse, neg-safe)",
+        "desc": "GameState.LoseCash -> negate if negative, then jmp AddCash",
         "offset": 0x40E640,
         "bytes": bytes([
-            # jmp AddCash (RVA 0x40A6D0, relative from RVA 0x40F445)
-            0xE9, 0x8B, 0xB2, 0xFF, 0xFF,
+            0x85, 0xD2,                            # test edx, edx   ; check sign of val
+            0x79, 0x02,                            # jns +2          ; skip neg if positive
+            0xF7, 0xDA,                            # neg edx         ; make negative val positive
+            # jmp AddCash (RVA 0x40A6D0, relative from RVA 0x40F44B)
+            0xE9, 0x85, 0xB2, 0xFF, 0xFF,
         ]),
     },
     {
-        "name": "LoseCrystal -> AddCrystal (reverse)",
-        "desc": "GameState.LoseCrystal -> jmp to AddCrystal (spending gives you crystals instead)",
+        "name": "LoseCrystal -> AddCrystal (reverse, neg-safe)",
+        "desc": "GameState.LoseCrystal -> negate if negative, then jmp AddCrystal",
         "offset": 0x40E6C0,
         "bytes": bytes([
-            # jmp AddCrystal (RVA 0x40A790, relative from RVA 0x40F4C5)
-            0xE9, 0xCB, 0xB2, 0xFF, 0xFF,
+            0x85, 0xD2,                            # test edx, edx   ; check sign of val
+            0x79, 0x02,                            # jns +2          ; skip neg if positive
+            0xF7, 0xDA,                            # neg edx         ; make negative val positive
+            # jmp AddCrystal (RVA 0x40A790, relative from RVA 0x40F4CB)
+            0xE9, 0xC5, 0xB2, 0xFF, 0xFF,
         ]),
     },
     #
@@ -101,7 +107,7 @@ PATCHES = [
 
 def main():
     print("=" * 60)
-    print("  Zombie3D Game - IL2CPP Patcher v6")
+    print("  Zombie3D Game - IL2CPP Patcher v7")
     print("=" * 60)
     print()
 
@@ -170,7 +176,8 @@ def main():
     print()
     print("  HOW IT WORKS:")
     print("    Every purchase adds the cost to your balance instead of")
-    print("    subtracting it. Your currency grows naturally as you buy.")
+    print("    subtracting it. Negative-cost items (day unlock rewards)")
+    print("    also give you money correctly.")
     print()
     print("  Weapon stats, character stats, and spawns are NOT modified.")
     print()
