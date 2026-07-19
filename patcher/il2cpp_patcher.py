@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Dino Hunter Multiplayer - IL2CPP GameAssembly.dll Patcher
+Dino Hunter Multiplayer - IL2CPP GameAssembly.dll Patcher v2
 
 Patches native x86-64 code in GameAssembly.dll for:
   1. God Mode        - Player cannot take damage
@@ -8,12 +8,15 @@ Patches native x86-64 code in GameAssembly.dll for:
   3. Unlimited Ammo  - Never consume bullets, never empty
   4. Max Gold        - Gold always reads as 999,999,999
   5. Max Crystal     - Crystals always read as 999,999,999
+  6. 50x Hunter EXP  - Hunter level EXP multiplied by 50
+  7. 50x Char EXP    - Character level EXP multiplied by 50
 
 Usage:
   python il2cpp_patcher.py                        (looks for GameAssembly.dll in current dir)
   python il2cpp_patcher.py C:\Games\DinoHunter\GameAssembly.dll
 
-To restore the original, rename GameAssembly.dll.backup back to GameAssembly.dll.
+IMPORTANT: Restore from .backup before re-patching if you previously
+           applied an older version of this patcher.
 """
 
 import struct
@@ -94,12 +97,79 @@ PATCHES = [
             0xC3,
         ]),
     },
+    #
+    # ── 50x EXP multiplier ──
+    #
+    {
+        "name": "50x Hunter EXP",
+        "desc": "iDataCenter.AddHunterExp -> multiply exp by 50, add to HunterExp + HunterExpTotal",
+        "offset": 0x3CFBF0,
+        "bytes": bytes([
+            0x53,                                          # push rbx
+            0x56,                                          # push rsi
+            0x48, 0x83, 0xEC, 0x28,                       # sub rsp, 0x28
+            0x48, 0x8B, 0xD9,                             # mov rbx, rcx          ; this
+            0x6B, 0xF2, 0x32,                             # imul esi, edx, 50     ; esi = nHunterExp * 50
+            # m_nHunterExp += esi
+            0x48, 0x8B, 0x8B, 0xD8, 0x01, 0x00, 0x00,   # mov rcx, [rbx+0x1D8] ; m_nHunterExp
+            0xE8, 0xA8, 0xF9, 0x14, 0x00,                # call SafeInteger.Get
+            0x01, 0xF0,                                    # add eax, esi
+            0x48, 0x8B, 0x8B, 0xD8, 0x01, 0x00, 0x00,   # mov rcx, [rbx+0x1D8]
+            0x8B, 0xD0,                                    # mov edx, eax
+            0xE8, 0x68, 0xFA, 0x14, 0x00,                # call SafeInteger.Set
+            # m_nHunterExpTotal += esi
+            0x48, 0x8B, 0x8B, 0xE0, 0x01, 0x00, 0x00,   # mov rcx, [rbx+0x1E0] ; m_nHunterExpTotal
+            0xE8, 0x8C, 0xF9, 0x14, 0x00,                # call SafeInteger.Get
+            0x01, 0xF0,                                    # add eax, esi
+            0x48, 0x8B, 0x8B, 0xE0, 0x01, 0x00, 0x00,   # mov rcx, [rbx+0x1E0]
+            0x8B, 0xD0,                                    # mov edx, eax
+            0xE8, 0x4C, 0xFA, 0x14, 0x00,                # call SafeInteger.Set
+            0x48, 0x83, 0xC4, 0x28,                       # add rsp, 0x28
+            0x5E,                                          # pop rsi
+            0x5B,                                          # pop rbx
+            0xC3,                                          # ret
+        ]),
+    },
+    {
+        "name": "50x Character EXP",
+        "desc": "CCharUser.AddExp -> multiply exp by 50, add to m_nExp, call LevelUp",
+        "offset": 0x39D3D0,
+        "bytes": bytes([
+            0x53,                                          # push rbx
+            0x56,                                          # push rsi
+            0x57,                                          # push rdi
+            0x48, 0x83, 0xEC, 0x20,                       # sub rsp, 0x20
+            0x48, 0x8B, 0xD9,                             # mov rbx, rcx          ; this
+            0x48, 0x8B, 0xF2,                             # mov rsi, rdx          ; nExp (SafeInteger)
+            # get the exp value from parameter
+            0x48, 0x8B, 0xCE,                             # mov rcx, rsi
+            0xE8, 0xCB, 0x21, 0x18, 0x00,                # call SafeInteger.Get
+            0x6B, 0xF8, 0x32,                             # imul edi, eax, 50     ; edi = exp * 50
+            # m_nExp += edi
+            0x48, 0x8B, 0x8B, 0x58, 0x03, 0x00, 0x00,   # mov rcx, [rbx+0x358] ; m_nExp
+            0xE8, 0xBC, 0x21, 0x18, 0x00,                # call SafeInteger.Get
+            0x01, 0xF8,                                    # add eax, edi
+            0x48, 0x8B, 0x8B, 0x58, 0x03, 0x00, 0x00,   # mov rcx, [rbx+0x358]
+            0x8B, 0xD0,                                    # mov edx, eax
+            0xE8, 0x7C, 0x22, 0x18, 0x00,                # call SafeInteger.Set
+            # LevelUp(this, ref m_nExp, ref m_nLevel)
+            0x48, 0x8B, 0xCB,                             # mov rcx, rbx
+            0x48, 0x8D, 0x93, 0x58, 0x03, 0x00, 0x00,   # lea rdx, [rbx+0x358] ; ref m_nExp
+            0x4C, 0x8D, 0x83, 0x50, 0x03, 0x00, 0x00,   # lea r8, [rbx+0x350]  ; ref m_nLevel
+            0xE8, 0x26, 0x17, 0x00, 0x00,                # call LevelUp
+            0x48, 0x83, 0xC4, 0x20,                       # add rsp, 0x20
+            0x5F,                                          # pop rdi
+            0x5E,                                          # pop rsi
+            0x5B,                                          # pop rbx
+            0xC3,                                          # ret
+        ]),
+    },
 ]
 
 
 def main():
     print("=" * 60)
-    print("  Dino Hunter Multiplayer - IL2CPP Patcher")
+    print("  Dino Hunter Multiplayer - IL2CPP Patcher v2")
     print("=" * 60)
     print()
 
@@ -168,6 +238,8 @@ def main():
     print("    - Unlimited Ammo (infinite bullets)")
     print("    - Max Gold (999,999,999)")
     print("    - Max Crystal (999,999,999)")
+    print("    - 50x Hunter EXP (hunter level)")
+    print("    - 50x Character EXP (character level)")
     print()
     print("  To restore original: copy .backup over GameAssembly.dll")
 
