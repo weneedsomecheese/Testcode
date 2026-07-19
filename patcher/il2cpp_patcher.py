@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Dino Hunter Multiplayer - IL2CPP GameAssembly.dll Patcher v4
+Dino Hunter Multiplayer - IL2CPP GameAssembly.dll Patcher v5
 
 Patches native x86-64 code in GameAssembly.dll for:
   1. God Mode        - Player cannot take damage
@@ -121,33 +121,48 @@ PATCHES = [
     },
     {
         "name": "50x Character EXP",
-        "desc": "CCharUser.AddExp -> multiply exp by 50, add to m_nExp, call LevelUp",
+        "desc": "CCharUser.AddExp -> multiply exp by 50, add to m_nExp, call LevelUp, multiply iGameState.m_nLevelRewardExp for persistence",
         "offset": 0x39D3D0,
         "bytes": bytes([
             0x53,                                          # push rbx
             0x56,                                          # push rsi
             0x57,                                          # push rdi
-            0x48, 0x83, 0xEC, 0x20,                       # sub rsp, 0x20
+            0x41, 0x54,                                    # push r12
+            0x48, 0x83, 0xEC, 0x28,                       # sub rsp, 0x28
             0x48, 0x8B, 0xD9,                             # mov rbx, rcx          ; this
             0x48, 0x8B, 0xF2,                             # mov rsi, rdx          ; nExp (SafeInteger)
             # get the exp value from parameter
             0x48, 0x8B, 0xCE,                             # mov rcx, rsi
-            0xE8, 0xCB, 0x21, 0x18, 0x00,                # call SafeInteger.Get
+            0xE8, 0xC9, 0x21, 0x18, 0x00,                # call SafeInteger.Get
             0x6B, 0xF8, 0x32,                             # imul edi, eax, 50     ; edi = exp * 50
             # m_nExp += edi
             0x48, 0x8B, 0x8B, 0x58, 0x03, 0x00, 0x00,   # mov rcx, [rbx+0x358] ; m_nExp
-            0xE8, 0xBC, 0x21, 0x18, 0x00,                # call SafeInteger.Get
+            0xE8, 0xBA, 0x21, 0x18, 0x00,                # call SafeInteger.Get
             0x01, 0xF8,                                    # add eax, edi
             0x48, 0x8B, 0x8B, 0x58, 0x03, 0x00, 0x00,   # mov rcx, [rbx+0x358]
             0x8B, 0xD0,                                    # mov edx, eax
-            0xE8, 0x7C, 0x22, 0x18, 0x00,                # call SafeInteger.Set
+            0xE8, 0x7A, 0x22, 0x18, 0x00,                # call SafeInteger.Set
             # LevelUp(this, ref m_nExp, ref m_nLevel, NULL)
             0x48, 0x8B, 0xCB,                             # mov rcx, rbx
             0x48, 0x8D, 0x93, 0x58, 0x03, 0x00, 0x00,   # lea rdx, [rbx+0x358] ; ref m_nExp
             0x4C, 0x8D, 0x83, 0x50, 0x03, 0x00, 0x00,   # lea r8, [rbx+0x350]  ; ref m_nLevel
             0x45, 0x31, 0xC9,                             # xor r9d, r9d         ; NULL MethodInfo*
-            0xE8, 0x23, 0x17, 0x00, 0x00,                # call LevelUp
-            0x48, 0x83, 0xC4, 0x20,                       # add rsp, 0x20
+            0xE8, 0x21, 0x17, 0x00, 0x00,                # call LevelUp
+            # --- Multiply m_nLevelRewardExp for persistence ---
+            0x48, 0x8B, 0xCB,                             # mov rcx, rbx         ; this
+            0xE8, 0xB9, 0x7C, 0xF0, 0xFF,                # call get_m_GameState  ; rax = iGameState
+            0x49, 0x89, 0xC4,                             # mov r12, rax         ; r12 = iGameState
+            0x41, 0x8B, 0x44, 0x24, 0x70,                # mov eax, [r12+0x70]  ; m_nLevelRewardExp
+            0x41, 0x3B, 0x44, 0x24, 0x78,                # cmp eax, [r12+0x78]  ; compare with marker
+            0x74, 0x11,                                    # je skip (already multiplied)
+            0x85, 0xC0,                                    # test eax, eax
+            0x7E, 0x0D,                                    # jle skip (exp <= 0)
+            0x6B, 0xC0, 0x32,                             # imul eax, eax, 50
+            0x41, 0x89, 0x44, 0x24, 0x70,                # mov [r12+0x70], eax  ; store multiplied
+            0x41, 0x89, 0x44, 0x24, 0x78,                # mov [r12+0x78], eax  ; set marker
+            # skip:
+            0x48, 0x83, 0xC4, 0x28,                       # add rsp, 0x28
+            0x41, 0x5C,                                    # pop r12
             0x5F,                                          # pop rdi
             0x5E,                                          # pop rsi
             0x5B,                                          # pop rbx
@@ -159,7 +174,7 @@ PATCHES = [
 
 def main():
     print("=" * 60)
-    print("  Dino Hunter Multiplayer - IL2CPP Patcher v3")
+    print("  Dino Hunter Multiplayer - IL2CPP Patcher v5")
     print("=" * 60)
     print()
 
