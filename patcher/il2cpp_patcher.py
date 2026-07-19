@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Dino Hunter Multiplayer - IL2CPP GameAssembly.dll Patcher v2
+Dino Hunter Multiplayer - IL2CPP GameAssembly.dll Patcher v3
 
 Patches native x86-64 code in GameAssembly.dll for:
   1. God Mode        - Player cannot take damage
-  2. One-Hit Kill    - All enemies die in one hit
+  2. One-Hit Kill    - All enemies die in one hit (base + mob override)
   3. Unlimited Ammo  - Never consume bullets, never empty
   4. Max Gold        - Gold always reads as 999,999,999
   5. Max Crystal     - Crystals always read as 999,999,999
@@ -19,12 +19,9 @@ IMPORTANT: Restore from .backup before re-patching if you previously
            applied an older version of this patcher.
 """
 
-import struct
 import shutil
 import sys
 import os
-
-NEG_999999_BYTES = struct.pack('<f', -999999.0)
 
 PATCHES = [
     {
@@ -37,22 +34,28 @@ PATCHES = [
         ]),
     },
     {
-        "name": "One-Hit Kill",
-        "desc": "CCharBase.OnHit -> subtract 999999 from HP, return true",
+        "name": "One-Hit Kill (base)",
+        "desc": "CCharBase.OnHit -> set HP = -1.0f, return true",
         "offset": 0x2A25D0,
         "bytes": bytes([
-            # movss xmm0, dword ptr [rcx+0x124]   ; load this->m_fHP
-            0xF3, 0x0F, 0x10, 0x81, 0x24, 0x01, 0x00, 0x00,
-            # mov eax, <-999999.0f as uint32>      ; load float constant
-            0xB8, NEG_999999_BYTES[0], NEG_999999_BYTES[1],
-                  NEG_999999_BYTES[2], NEG_999999_BYTES[3],
-            # movd xmm1, eax                       ; move to SSE register
-            0x66, 0x0F, 0x6E, 0xC8,
-            # addss xmm0, xmm1                     ; HP += (-999999) = HP - 999999
-            0xF3, 0x0F, 0x58, 0xC1,
-            # movss dword ptr [rcx+0x124], xmm0    ; store this->m_fHP
-            0xF3, 0x0F, 0x11, 0x81, 0x24, 0x01, 0x00, 0x00,
-            # mov eax, 1                            ; return true (hit landed)
+            # mov dword ptr [rcx+0x124], 0xBF800000  ; m_fHP = -1.0f
+            0xC7, 0x81, 0x24, 0x01, 0x00, 0x00,
+            0x00, 0x00, 0x80, 0xBF,
+            # mov eax, 1                              ; return true
+            0xB8, 0x01, 0x00, 0x00, 0x00,
+            # ret
+            0xC3,
+        ]),
+    },
+    {
+        "name": "One-Hit Kill (mob)",
+        "desc": "CCharMob.OnHit -> set HP = -1.0f, return true (co-op fix)",
+        "offset": 0x2B2420,
+        "bytes": bytes([
+            # mov dword ptr [rcx+0x124], 0xBF800000  ; m_fHP = -1.0f
+            0xC7, 0x81, 0x24, 0x01, 0x00, 0x00,
+            0x00, 0x00, 0x80, 0xBF,
+            # mov eax, 1                              ; return true
             0xB8, 0x01, 0x00, 0x00, 0x00,
             # ret
             0xC3,
@@ -152,11 +155,12 @@ PATCHES = [
             0x48, 0x8B, 0x8B, 0x58, 0x03, 0x00, 0x00,   # mov rcx, [rbx+0x358]
             0x8B, 0xD0,                                    # mov edx, eax
             0xE8, 0x7C, 0x22, 0x18, 0x00,                # call SafeInteger.Set
-            # LevelUp(this, ref m_nExp, ref m_nLevel)
+            # LevelUp(this, ref m_nExp, ref m_nLevel, NULL)
             0x48, 0x8B, 0xCB,                             # mov rcx, rbx
             0x48, 0x8D, 0x93, 0x58, 0x03, 0x00, 0x00,   # lea rdx, [rbx+0x358] ; ref m_nExp
             0x4C, 0x8D, 0x83, 0x50, 0x03, 0x00, 0x00,   # lea r8, [rbx+0x350]  ; ref m_nLevel
-            0xE8, 0x26, 0x17, 0x00, 0x00,                # call LevelUp
+            0x45, 0x31, 0xC9,                             # xor r9d, r9d         ; NULL MethodInfo*
+            0xE8, 0x23, 0x17, 0x00, 0x00,                # call LevelUp
             0x48, 0x83, 0xC4, 0x20,                       # add rsp, 0x20
             0x5F,                                          # pop rdi
             0x5E,                                          # pop rsi
@@ -169,7 +173,7 @@ PATCHES = [
 
 def main():
     print("=" * 60)
-    print("  Dino Hunter Multiplayer - IL2CPP Patcher v2")
+    print("  Dino Hunter Multiplayer - IL2CPP Patcher v3")
     print("=" * 60)
     print()
 
@@ -234,7 +238,7 @@ def main():
     print()
     print("  Active mods:")
     print("    - God Mode (invincible)")
-    print("    - One-Hit Kill (enemies die instantly)")
+    print("    - One-Hit Kill (enemies die instantly, co-op fixed)")
     print("    - Unlimited Ammo (infinite bullets)")
     print("    - Max Gold (999,999,999)")
     print("    - Max Crystal (999,999,999)")
