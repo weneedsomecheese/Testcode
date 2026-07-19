@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Dino Hunter Multiplayer - IL2CPP GameAssembly.dll Patcher v3
+Dino Hunter Multiplayer - IL2CPP GameAssembly.dll Patcher v4
 
 Patches native x86-64 code in GameAssembly.dll for:
   1. God Mode        - Player cannot take damage
-  2. One-Hit Kill    - All enemies die in one hit (base + mob override)
+  2. One-Hit Kill    - All enemies die in one hit (any HP level)
   3. Unlimited Ammo  - Never consume bullets, never empty
   4. Max Gold        - Gold always reads as 999,999,999
   5. Max Crystal     - Crystals always read as 999,999,999
@@ -34,23 +34,9 @@ PATCHES = [
         ]),
     },
     {
-        "name": "One-Hit Kill (base)",
+        "name": "One-Hit Kill",
         "desc": "CCharBase.OnHit -> set HP = -1.0f, return true",
         "offset": 0x2A25D0,
-        "bytes": bytes([
-            # mov dword ptr [rcx+0x124], 0xBF800000  ; m_fHP = -1.0f
-            0xC7, 0x81, 0x24, 0x01, 0x00, 0x00,
-            0x00, 0x00, 0x80, 0xBF,
-            # mov eax, 1                              ; return true
-            0xB8, 0x01, 0x00, 0x00, 0x00,
-            # ret
-            0xC3,
-        ]),
-    },
-    {
-        "name": "One-Hit Kill (mob)",
-        "desc": "CCharMob.OnHit -> set HP = -1.0f, return true (co-op fix)",
-        "offset": 0x2B2420,
         "bytes": bytes([
             # mov dword ptr [rcx+0x124], 0xBF800000  ; m_fHP = -1.0f
             0xC7, 0x81, 0x24, 0x01, 0x00, 0x00,
@@ -238,7 +224,7 @@ def main():
     print()
     print("  Active mods:")
     print("    - God Mode (invincible)")
-    print("    - One-Hit Kill (enemies die instantly, co-op fixed)")
+    print("    - One-Hit Kill (enemies die instantly, any HP level)")
     print("    - Unlimited Ammo (infinite bullets)")
     print("    - Max Gold (999,999,999)")
     print("    - Max Crystal (999,999,999)")
